@@ -1,4 +1,6 @@
+
 import pytest
+
 from src.task_manager.database import init_db
 from src.task_manager.repository import TaskRepository
 from src.task_manager.services import TaskService
@@ -23,6 +25,14 @@ def test_create_task(tmp_path):
     assert task.completed is False
 
 
+def test_create_task_strips_whitespace(tmp_path):
+    service = create_test_service(tmp_path)
+
+    task = service.create_task("  Belajar Python  ", "  Latihan coding  ")
+
+    assert task.title == "Belajar Python"
+    assert task.description == "Latihan coding"
+
 
 def test_create_task_rejects_empty_title(tmp_path):
     service = create_test_service(tmp_path)
@@ -34,17 +44,37 @@ def test_create_task_rejects_empty_title(tmp_path):
         service.create_task("   ")
 
 
-
 def test_update_task(tmp_path):
     service = create_test_service(tmp_path)
     task = service.create_task("Tugas lama", "Deskripsi lama")
 
-    result = service.update_task(task.id, "Tugas baru", "Deskripsi baru")
+    result = service.update_task(
+        task.id,
+        "Tugas baru",
+        "Deskripsi baru",
+    )
 
     assert result is True
     updated_task = service.list_tasks()[0]
     assert updated_task.title == "Tugas baru"
     assert updated_task.description == "Deskripsi baru"
+
+
+def test_update_task_rejects_empty_title(tmp_path):
+    service = create_test_service(tmp_path)
+    task = service.create_task("Tugas lama")
+
+    with pytest.raises(
+        ValueError,
+        match="Judul tugas tidak boleh kosong.",
+    ):
+        service.update_task(task.id, "   ")
+
+
+def test_update_nonexistent_task_returns_false(tmp_path):
+    service = create_test_service(tmp_path)
+
+    assert service.update_task(999, "Tugas baru") is False
 
 
 def test_complete_task(tmp_path):
@@ -57,6 +87,12 @@ def test_complete_task(tmp_path):
     assert service.list_tasks()[0].completed is True
 
 
+def test_complete_nonexistent_task_returns_false(tmp_path):
+    service = create_test_service(tmp_path)
+
+    assert service.complete_task(999) is False
+
+
 def test_delete_task(tmp_path):
     service = create_test_service(tmp_path)
     task = service.create_task("Tugas yang akan dihapus")
@@ -65,18 +101,6 @@ def test_delete_task(tmp_path):
 
     assert result is True
     assert service.list_tasks() == []
-
-
-def test_update_nonexistent_task_returns_false(tmp_path):
-    service = create_test_service(tmp_path)
-
-    assert service.update_task(999, "Tugas baru") is False
-
-
-def test_complete_nonexistent_task_returns_false(tmp_path):
-    service = create_test_service(tmp_path)
-
-    assert service.complete_task(999) is False
 
 
 def test_delete_nonexistent_task_returns_false(tmp_path):
