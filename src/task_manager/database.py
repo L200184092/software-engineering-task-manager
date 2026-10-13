@@ -19,7 +19,7 @@ def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
 
 
 def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
-    """Membuat tabel tasks jika belum tersedia."""
+    """Membuat tabel tasks dan memperbarui skema jika diperlukan."""
     with get_connection(db_path) as connection:
         connection.execute(
             """
@@ -32,3 +32,26 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
             )
             """
         )
+
+        columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(tasks)"
+            ).fetchall()
+        }
+
+        if "priority" not in columns:
+            connection.execute(
+                """
+                ALTER TABLE tasks
+                ADD COLUMN priority TEXT NOT NULL DEFAULT 'Medium'
+                """
+            )
+
+        if "due_date" not in columns:
+            connection.execute(
+                """
+                ALTER TABLE tasks
+                ADD COLUMN due_date TEXT
+                """
+            )

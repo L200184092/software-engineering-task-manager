@@ -1,5 +1,4 @@
 
-import sqlite3
 from pathlib import Path
 
 from .database import DEFAULT_DB_PATH, get_connection
@@ -20,10 +19,18 @@ class TaskRepository:
         with get_connection(self.db_path) as connection:
             cursor = connection.execute(
                 """
-                INSERT INTO tasks (title, description, completed)
-                VALUES (?, ?, ?)
+                INSERT INTO tasks (
+                    title, description, completed, priority, due_date
+                )
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (task.title, task.description, int(task.completed)),
+                (
+                    task.title,
+                    task.description,
+                    int(task.completed),
+                    task.priority,
+                    task.due_date,
+                ),
             )
 
             task_id = cursor.lastrowid
@@ -33,6 +40,8 @@ class TaskRepository:
             title=task.title,
             description=task.description,
             completed=task.completed,
+            priority=task.priority,
+            due_date=task.due_date,
         )
 
     def get_all(self) -> list[Task]:
@@ -40,7 +49,7 @@ class TaskRepository:
         with get_connection(self.db_path) as connection:
             rows = connection.execute(
                 """
-                SELECT id, title, description, completed
+                SELECT id, title, description, completed, priority, due_date
                 FROM tasks
                 ORDER BY id
                 """
@@ -52,10 +61,12 @@ class TaskRepository:
                 title=row["title"],
                 description=row["description"],
                 completed=bool(row["completed"]),
+                priority=row["priority"],
+                due_date=row["due_date"],
             )
             for row in rows
         ]
-    
+
     def update(self, task: Task) -> bool:
         """Memperbarui tugas berdasarkan ID."""
         if task.id is None:
@@ -65,13 +76,16 @@ class TaskRepository:
             cursor = connection.execute(
                 """
                 UPDATE tasks
-                SET title = ?, description = ?, completed = ?
+                SET title = ?, description = ?, completed = ?,
+                    priority = ?, due_date = ?
                 WHERE id = ?
                 """,
                 (
                     task.title,
                     task.description,
                     int(task.completed),
+                    task.priority,
+                    task.due_date,
                     task.id,
                 ),
             )

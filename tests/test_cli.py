@@ -18,6 +18,8 @@ def test_cli_add_and_list_task(monkeypatch, capsys, tmp_path):
         "1",
         "Belajar pytest",
         "Latihan CLI",
+        "High",
+        "2026-10-20",
         "2",
         "0",
     ])
@@ -38,4 +40,6 @@ def test_cli_add_and_list_task(monkeypatch, capsys, tmp_path):
     assert "Tugas berhasil ditambahkan" in output
     assert "Belajar pytest" in output
     assert "Latihan CLI" in output
+    assert "Prioritas: High" in output
+    assert "Tenggat: 2026-10-20" in output
     assert "Terima kasih" in output

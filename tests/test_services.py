@@ -1,6 +1,5 @@
 
 import pytest
-
 from src.task_manager.database import init_db
 from src.task_manager.repository import TaskRepository
 from src.task_manager.services import TaskService
@@ -107,3 +106,129 @@ def test_delete_nonexistent_task_returns_false(tmp_path):
     service = create_test_service(tmp_path)
 
     assert service.delete_task(999) is False
+
+
+def test_create_task_with_priority_and_due_date(tmp_path):
+    service = create_test_service(tmp_path)
+
+    task = service.create_task("Selesaikan proyek", "Tahap pengujian")
+
+    task.priority = "High"
+    task.due_date = "2026-10-20"
+    service.repository.update(task)
+
+    saved_task = service.list_tasks()[0]
+
+    assert saved_task.priority == "High"
+    assert saved_task.due_date == "2026-10-20"
+
+
+def test_update_task_priority_and_due_date(tmp_path):
+    service = create_test_service(tmp_path)
+    task = service.create_task("Tugas lama")
+
+    task.priority = "Low"
+    task.due_date = "2026-10-25"
+
+    result = service.repository.update(task)
+
+    assert result is True
+
+    updated_task = service.list_tasks()[0]
+    assert updated_task.priority == "Low"
+    assert updated_task.due_date == "2026-10-25"
+
+
+def test_task_default_priority_and_due_date(tmp_path):
+    service = create_test_service(tmp_path)
+
+    task = service.create_task("Tugas tanpa tenggat")
+
+    saved_task = service.list_tasks()[0]
+
+    assert saved_task.priority == "Medium"
+    assert saved_task.due_date is None
+
+def test_create_task_rejects_invalid_priority(tmp_path):
+    service = create_test_service(tmp_path)
+
+    with pytest.raises(ValueError, match="Prioritas harus Low, Medium, atau High"):
+        service.create_task("Tugas baru", priority="Urgent")
+
+
+def test_create_task_rejects_invalid_due_date(tmp_path):
+    service = create_test_service(tmp_path)
+
+    with pytest.raises(ValueError, match="Tanggal tenggat harus valid"):
+        service.create_task("Tugas baru", due_date="2026-02-30")
+
+
+def test_create_task_rejects_wrong_due_date_format(tmp_path):
+    service = create_test_service(tmp_path)
+
+    with pytest.raises(ValueError, match="Tanggal tenggat harus"):
+        service.create_task("Tugas baru", due_date="20-10-2026")
+
+
+def test_create_task_accepts_empty_due_date(tmp_path):
+    service = create_test_service(tmp_path)
+
+    task = service.create_task("Tugas tanpa tenggat", due_date="")
+
+    assert task.due_date is None
+
+
+def test_update_task_preserves_priority_and_due_date_when_omitted(
+    tmp_path,
+):
+    task_service = create_test_service(tmp_path)
+    task = task_service.create_task(
+        "Belajar Python",
+        "Mengerjakan latihan",
+        "High",
+        "2026-10-20",
+    )
+
+    result = task_service.update_task(
+        task.id,
+        "Belajar Python Lanjutan",
+        "Mengerjakan proyek",
+    )
+
+    assert result is True
+
+    updated_task = next(
+        item
+        for item in task_service.list_tasks()
+        if item.id == task.id
+    )
+
+    assert updated_task.title == "Belajar Python Lanjutan"
+    assert updated_task.priority == "High"
+    assert updated_task.due_date == "2026-10-20"
+
+
+def test_update_task_can_clear_due_date(tmp_path):
+    task_service = create_test_service(tmp_path)
+    task = task_service.create_task(
+        "Belajar Python",
+        priority="High",
+        due_date="2026-10-20",
+    )
+
+    result = task_service.update_task(
+        task.id,
+        "Belajar Python",
+        priority="High",
+        due_date=None,
+    )
+
+    assert result is True
+
+    updated_task = next(
+        item
+        for item in task_service.list_tasks()
+        if item.id == task.id
+    )
+
+    assert updated_task.due_date is None

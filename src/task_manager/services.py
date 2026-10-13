@@ -1,24 +1,72 @@
-
+from datetime import date
 from .models import Task
 from .repository import TaskRepository
 
+_UNSET = object()
 
 class TaskService:
     """Menangani logika bisnis dan validasi tugas."""
 
+    VALID_PRIORITIES = {"Low", "Medium", "High"}
+
     def __init__(self, repository: TaskRepository | None = None) -> None:
         self.repository = repository or TaskRepository()
 
-    def create_task(self, title: str, description: str = "") -> Task:
+    @staticmethod
+    def _validate_due_date(due_date: str | None) -> str | None:
+        """Memvalidasi tenggat waktu dengan format YYYY-MM-DD."""
+        if due_date is None or not due_date.strip():
+            return None
+
+        due_date = due_date.strip()
+
+        try:
+            parsed_date = date.fromisoformat(due_date)
+        except ValueError as exc:
+            raise ValueError(
+                "Tanggal tenggat harus valid dengan format YYYY-MM-DD."
+            ) from exc
+
+        if parsed_date.isoformat() != due_date:
+            raise ValueError(
+                "Tanggal tenggat harus menggunakan format YYYY-MM-DD."
+            )
+
+        return due_date
+
+    @classmethod
+    def _validate_priority(cls, priority: str) -> str:
+        """Memastikan prioritas termasuk Low, Medium, atau High."""
+        if priority not in cls.VALID_PRIORITIES:
+            raise ValueError(
+                "Prioritas harus Low, Medium, atau High."
+            )
+
+        return priority
+
+    def create_task(
+        self,
+        title: str,
+        description: str = "",
+        priority: str = "Medium",
+        due_date: str | None = None,
+    ) -> Task:
         """Membuat tugas baru setelah memvalidasi input."""
         title = title.strip()
         description = description.strip()
+        priority = self._validate_priority(priority)
+        due_date = self._validate_due_date(due_date)
 
         if not title:
             raise ValueError("Judul tugas tidak boleh kosong.")
 
         return self.repository.create(
-            Task(title=title, description=description)
+            Task(
+                title=title,
+                description=description,
+                priority=priority,
+                due_date=due_date,
+            )
         )
 
     def list_tasks(self) -> list[Task]:
@@ -30,8 +78,10 @@ class TaskService:
         task_id: int,
         title: str,
         description: str = "",
+        priority: str | None = None,
+        due_date: str | None | object = _UNSET,
     ) -> bool:
-        """Memperbarui judul dan deskripsi tugas."""
+        """Memperbarui tugas tanpa mengubah nilai opsional yang tidak diberikan."""
         title = title.strip()
         description = description.strip()
 
@@ -39,23 +89,37 @@ class TaskService:
             raise ValueError("Judul tugas tidak boleh kosong.")
 
         task = next(
-            (item for item in self.repository.get_all()
-             if item.id == task_id),
+            (
+                item
+                for item in self.repository.get_all()
+                if item.id == task_id
+            ),
             None,
         )
 
         if task is None:
             return False
 
+        if priority is not None:
+            task.priority = self._validate_priority(priority)
+
+        if due_date is not _UNSET:
+            task.due_date = self._validate_due_date(due_date)
+
         task.title = title
         task.description = description
+
         return self.repository.update(task)
+
 
     def complete_task(self, task_id: int) -> bool:
         """Menandai tugas sebagai selesai."""
         task = next(
-            (item for item in self.repository.get_all()
-             if item.id == task_id),
+            (
+                item
+                for item in self.repository.get_all()
+                if item.id == task_id
+            ),
             None,
         )
 
