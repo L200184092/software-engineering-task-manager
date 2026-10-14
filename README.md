@@ -11,6 +11,10 @@ A command-line task management application built with Python and SQLite. This pr
 - Update task information while preserving optional values that are not provided.
 - Mark tasks as completed.
 - Delete tasks.
+- Search tasks by title or description, with case-insensitive matching.
+- Filter tasks by completion status and priority.
+- Sort tasks by priority (`High` to `Low`).
+- Sort tasks by due date, with tasks without due dates placed last.
 - Validate task titles, priorities, and due dates.
 - Store task data in an SQLite database.
 - Automatically initialize the database and migrate existing tables when necessary.
@@ -98,11 +102,36 @@ The application provides the following menu options:
 | 3 | Update a task |
 | 4 | Mark a task as completed |
 | 5 | Delete a task |
+| 6 | Search tasks |
+| 7 | Filter tasks |
+| 8 | Sort tasks |
 | 0 | Exit the application |
+
+### Task priorities and due dates
 
 When creating a task, you can specify its priority and an optional due date. Leave the due date empty if the task has no deadline.
 
 Valid priorities are `Low`, `Medium`, and `High`. Due dates must use the `YYYY-MM-DD` format, for example `2026-10-20`.
+
+### Search tasks
+
+Use menu option `6` to search for tasks by title or description. The search is case-insensitive.
+
+### Filter tasks
+
+Use menu option `7` to filter tasks by:
+
+- Incomplete tasks.
+- Completed tasks.
+- Priority.
+- Incomplete tasks with `High` priority.
+
+### Sort tasks
+
+Use menu option `8` to sort tasks by:
+
+- **Priority:** `High`, then `Medium`, then `Low`.
+- **Due date:** Earliest date first. Tasks without due dates appear last.
 
 ## Running Tests
 
@@ -112,7 +141,9 @@ Run the complete test suite with:
 python -m pytest -v
 ```
 
-The test suite covers task creation, input validation, updates, preservation of existing priority and due dates, due-date removal, task completion, deletion, and CLI interactions.
+The test suite covers task creation, input validation, updates, preservation of existing priority and due dates, due-date removal, task completion, deletion, searching, filtering, sorting, and CLI interactions.
+
+The current test suite contains 28 tests.
 
 ## Continuous Integration
 
@@ -127,13 +158,13 @@ The application separates responsibilities into modules:
 - **Models:** Represents task data.
 - **Database:** Manages SQLite connections, table initialization, and schema migration.
 - **Repository:** Handles database CRUD operations.
-- **Services:** Implements business logic and input validation.
+- **Services:** Implements business logic, searching, filtering, sorting, and input validation.
 - **CLI:** Provides the user interface.
 - **Tests:** Verifies application behavior automatically.
 
 ## Learning Objectives
 
-This project is part of a practical software engineering portfolio. It demonstrates Python programming, relational database operations, layered architecture, separation of concerns, input validation, automated testing, database schema migration, and continuous integration.
+This project is part of a practical software engineering portfolio. It demonstrates Python programming, relational database operations, layered architecture, separation of concerns, input validation, searching, filtering, sorting, automated testing, database schema migration, and continuous integration.
 
 ## License
 

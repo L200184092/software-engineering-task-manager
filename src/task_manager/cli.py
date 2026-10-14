@@ -22,6 +22,24 @@ def display_tasks(service: TaskService) -> None:
             print(f"    Deskripsi: {task.description}")
 
 
+def display_task_results(tasks) -> None:
+    """Menampilkan daftar tugas hasil pencarian atau filter."""
+    if not tasks:
+        print("\nTidak ada tugas yang cocok.")
+        return
+
+    print("\n=== HASIL TUGAS ===")
+    for task in tasks:
+        status = "Selesai" if task.completed else "Belum selesai"
+        due_date = task.due_date or "Tidak ada"
+        print(
+            f"[{task.id}] {task.title} - {status} "
+            f"| Prioritas: {task.priority} "
+            f"| Tenggat: {due_date}"
+        )
+        if task.description:
+            print(f"    Deskripsi: {task.description}")
+
 def ask_priority(current_priority: str = "Medium") -> str:
     """Meminta prioritas tugas dari pengguna."""
     print("Pilihan prioritas: Low, Medium, High")
@@ -57,6 +75,9 @@ def main() -> None:
         print("3. Perbarui tugas")
         print("4. Tandai tugas selesai")
         print("5. Hapus tugas")
+        print("6. Cari tugas")
+        print("7. Filter tugas")
+        print("8. Urutkan tugas")
         print("0. Keluar")
 
         choice = input("Pilih menu: ").strip()
@@ -143,6 +164,61 @@ def main() -> None:
                     print("Tugas tidak ditemukan.")
             except ValueError:
                 print("ID harus berupa angka.")
+
+
+        elif choice == "6":
+            query = input("Masukkan kata kunci: ")
+            results = service.search_tasks(query)
+            display_task_results(results)
+
+        elif choice == "7":
+            print("Filter berdasarkan:")
+            print("1. Belum selesai")
+            print("2. Selesai")
+            print("3. Prioritas")
+            print("4. Belum selesai dengan prioritas High")
+
+            filter_choice = input("Pilih filter: ").strip()
+
+            if filter_choice == "1":
+                results = service.filter_tasks(completed=False)
+            elif filter_choice == "2":
+                results = service.filter_tasks(completed=True)
+            elif filter_choice == "3":
+                priority = input(
+                    "Prioritas (Low, Medium, High): "
+                ).strip()
+                try:
+                    results = service.filter_tasks(priority=priority)
+                except ValueError as error:
+                    print(f"Filter gagal: {error}")
+                    continue
+            elif filter_choice == "4":
+                results = service.filter_tasks(
+                    completed=False,
+                    priority="High",
+                )
+            else:
+                print("Pilihan filter tidak valid.")
+                continue
+
+            display_task_results(results)
+
+        elif choice == "8":
+            print("\n=== URUTKAN TUGAS ===")
+            print("1. Berdasarkan prioritas (High ke Low)")
+            print("2. Berdasarkan tenggat (terdekat)")
+
+            sort_choice = input("Pilih pengurutan: ").strip()
+
+            if sort_choice == "1":
+                results = service.sort_tasks("priority")
+                display_task_results(results)
+            elif sort_choice == "2":
+                results = service.sort_tasks("due_date")
+                display_task_results(results)
+            else:
+                print("Pilihan pengurutan tidak valid.")
 
         elif choice == "0":
             print("Terima kasih telah menggunakan aplikasi.")

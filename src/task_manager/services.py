@@ -73,6 +73,74 @@ class TaskService:
         """Mengambil seluruh tugas."""
         return self.repository.get_all()
 
+    def search_tasks(self, query: str) -> list[Task]:
+        """Mencari tugas berdasarkan judul atau deskripsi."""
+        query = query.strip().casefold()
+
+        if not query:
+            return self.list_tasks()
+
+        return [
+            task
+            for task in self.list_tasks()
+            if query in task.title.casefold()
+            or query in task.description.casefold()
+        ]
+
+    def filter_tasks(
+        self,
+        completed: bool | None = None,
+        priority: str | None = None,
+    ) -> list[Task]:
+        """Memfilter tugas berdasarkan status dan prioritas."""
+        tasks = self.list_tasks()
+
+        if completed is not None:
+            tasks = [
+                task for task in tasks
+                if task.completed == completed
+            ]
+
+        if priority is not None:
+            priority = self._validate_priority(priority)
+            tasks = [
+                task for task in tasks
+                if task.priority == priority
+            ]
+
+        return tasks
+
+    def sort_tasks(
+        self,
+        sort_by: str = "priority",
+    ) -> list[Task]:
+        """Mengurutkan tugas berdasarkan prioritas atau tenggat."""
+        tasks = self.list_tasks()
+
+        if sort_by == "priority":
+            priority_order = {
+                "High": 0,
+                "Medium": 1,
+                "Low": 2,
+            }
+            return sorted(
+                tasks,
+                key=lambda task: priority_order[task.priority],
+            )
+
+        if sort_by == "due_date":
+            return sorted(
+                tasks,
+                key=lambda task: (
+                    task.due_date is None,
+                    task.due_date or "",
+                ),
+            )
+
+        raise ValueError(
+            "Pengurutan harus menggunakan 'priority' atau 'due_date'."
+        )
+
     def update_task(
         self,
         task_id: int,
@@ -110,7 +178,6 @@ class TaskService:
         task.description = description
 
         return self.repository.update(task)
-
 
     def complete_task(self, task_id: int) -> bool:
         """Menandai tugas sebagai selesai."""

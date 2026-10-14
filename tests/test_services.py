@@ -232,3 +232,85 @@ def test_update_task_can_clear_due_date(tmp_path):
     )
 
     assert updated_task.due_date is None
+
+
+def test_search_tasks_by_title(tmp_path):
+    service = create_test_service(tmp_path)
+    service.create_task("Belajar Python", "Latihan coding")
+    service.create_task("Belajar SQL", "Latihan database")
+
+    results = service.search_tasks("python")
+
+    assert len(results) == 1
+    assert results[0].title == "Belajar Python"
+
+
+def test_search_tasks_by_description(tmp_path):
+    service = create_test_service(tmp_path)
+    service.create_task("Tugas pertama", "Belajar machine learning")
+    service.create_task("Tugas kedua", "Belajar database")
+
+    results = service.search_tasks("MACHINE LEARNING")
+
+    assert len(results) == 1
+    assert results[0].title == "Tugas pertama"
+
+
+def test_filter_tasks_by_priority(tmp_path):
+    service = create_test_service(tmp_path)
+    service.create_task("Tugas A", priority="High")
+    service.create_task("Tugas B", priority="Low")
+    service.create_task("Tugas C", priority="High")
+
+    results = service.filter_tasks(priority="High")
+
+    assert len(results) == 2
+    assert all(task.priority == "High" for task in results)
+
+
+def test_filter_tasks_by_status_and_priority(tmp_path):
+    service = create_test_service(tmp_path)
+    task_a = service.create_task("Tugas A", priority="High")
+    service.create_task("Tugas B", priority="High")
+    service.create_task("Tugas C", priority="Low")
+
+    service.complete_task(task_a.id)
+
+    results = service.filter_tasks(
+        completed=False,
+        priority="High",
+    )
+
+    assert len(results) == 1
+    assert results[0].title == "Tugas B"
+    assert results[0].completed is False
+
+
+def test_sort_tasks_by_priority(tmp_path):
+    service = create_test_service(tmp_path)
+    service.create_task("Tugas Low", priority="Low")
+    service.create_task("Tugas High", priority="High")
+    service.create_task("Tugas Medium", priority="Medium")
+
+    results = service.sort_tasks("priority")
+
+    assert [task.priority for task in results] == [
+        "High",
+        "Medium",
+        "Low",
+    ]
+
+
+def test_sort_tasks_by_due_date_puts_missing_dates_last(tmp_path):
+    service = create_test_service(tmp_path)
+    service.create_task("Tanpa tenggat")
+    service.create_task("Tenggat kedua", due_date="2026-11-20")
+    service.create_task("Tenggat pertama", due_date="2026-10-20")
+
+    results = service.sort_tasks("due_date")
+
+    assert [task.title for task in results] == [
+        "Tenggat pertama",
+        "Tenggat kedua",
+        "Tanpa tenggat",
+    ]
