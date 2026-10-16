@@ -199,3 +199,31 @@ class TaskService:
     def delete_task(self, task_id: int) -> bool:
         """Menghapus tugas berdasarkan ID."""
         return self.repository.delete(task_id)
+
+    def get_task_statistics(self) -> dict:
+        """Menghitung statistik tugas."""
+        tasks = self.list_tasks()
+
+        total = len(tasks)
+        completed = sum(1 for task in tasks if task.completed)
+        pending = total - completed
+
+        priority_counts = {
+            "High": sum(1 for task in tasks if task.priority == "High"),
+            "Medium": sum(1 for task in tasks if task.priority == "Medium"),
+            "Low": sum(1 for task in tasks if task.priority == "Low"),
+        }
+
+        completion_rate = (
+            round((completed / total) * 100, 2)
+            if total > 0
+            else 0.0
+        )
+
+        return {
+            "total": total,
+            "completed": completed,
+            "pending": pending,
+            "completion_rate": completion_rate,
+            "priority_counts": priority_counts,
+        }

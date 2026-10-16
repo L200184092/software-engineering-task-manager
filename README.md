@@ -20,6 +20,8 @@ A command-line task management application built with Python and SQLite. This pr
 - Automatically initialize the database and migrate existing tables when necessary.
 - Run automated tests with pytest.
 - Run tests automatically through GitHub Actions on pushes and pull requests to the `main` branch.
+- View task statistics, including total tasks, completed tasks, pending tasks, and completion rate.
+- View task counts grouped by priority (`High`, `Medium`, and `Low`).
 
 ## Tech Stack
 
@@ -105,6 +107,7 @@ The application provides the following menu options:
 | 6 | Search tasks |
 | 7 | Filter tasks |
 | 8 | Sort tasks |
+| 9 | View task statistics |
 | 0 | Exit the application |
 
 ### Task priorities and due dates
@@ -143,7 +146,7 @@ python -m pytest -v
 
 The test suite covers task creation, input validation, updates, preservation of existing priority and due dates, due-date removal, task completion, deletion, searching, filtering, sorting, and CLI interactions.
 
-The current test suite contains 28 tests.
+The current test suite contains 32 tests.
 
 ## Continuous Integration
 

@@ -78,6 +78,7 @@ def main() -> None:
         print("6. Cari tugas")
         print("7. Filter tugas")
         print("8. Urutkan tugas")
+        print("9. Statistik Tugas")
         print("0. Keluar")
 
         choice = input("Pilih menu: ").strip()
@@ -219,6 +220,20 @@ def main() -> None:
                 display_task_results(results)
             else:
                 print("Pilihan pengurutan tidak valid.")
+
+        elif choice == "9":
+            stats = service.get_task_statistics()
+
+            print("\n=== STATISTIK TUGAS ===")
+            print(f"Total tugas       : {stats['total']}")
+            print(f"Tugas selesai     : {stats['completed']}")
+            print(f"Belum selesai     : {stats['pending']}")
+            print(f"Tingkat selesai   : {stats['completion_rate']:.2f}%")
+
+            print("\nDistribusi prioritas:")
+            print(f"High              : {stats['priority_counts']['High']}")
+            print(f"Medium            : {stats['priority_counts']['Medium']}")
+            print(f"Low               : {stats['priority_counts']['Low']}")
 
         elif choice == "0":
             print("Terima kasih telah menggunakan aplikasi.")

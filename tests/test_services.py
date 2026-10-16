@@ -314,3 +314,59 @@ def test_sort_tasks_by_due_date_puts_missing_dates_last(tmp_path):
         "Tenggat kedua",
         "Tanpa tenggat",
     ]
+
+
+
+def test_get_task_statistics(tmp_path):
+    service = create_test_service(tmp_path)
+
+    task_high = service.create_task("Tugas High", priority="High")
+    service.create_task("Tugas Medium", priority="Medium")
+    service.create_task("Tugas Low", priority="Low")
+
+    service.complete_task(task_high.id)
+
+    stats = service.get_task_statistics()
+
+    assert stats["total"] == 3
+    assert stats["completed"] == 1
+    assert stats["pending"] == 2
+    assert stats["completion_rate"] == 33.33
+    assert stats["priority_counts"] == {
+        "High": 1,
+        "Medium": 1,
+        "Low": 1,
+    }
+
+
+def test_get_task_statistics_with_no_tasks(tmp_path):
+    service = create_test_service(tmp_path)
+
+    stats = service.get_task_statistics()
+
+    assert stats["total"] == 0
+    assert stats["completed"] == 0
+    assert stats["pending"] == 0
+    assert stats["completion_rate"] == 0.0
+    assert stats["priority_counts"] == {
+        "High": 0,
+        "Medium": 0,
+        "Low": 0,
+    }
+
+
+def test_get_task_statistics_when_all_tasks_completed(tmp_path):
+    service = create_test_service(tmp_path)
+
+    task_one = service.create_task("Tugas 1")
+    task_two = service.create_task("Tugas 2")
+
+    service.complete_task(task_one.id)
+    service.complete_task(task_two.id)
+
+    stats = service.get_task_statistics()
+
+    assert stats["total"] == 2
+    assert stats["completed"] == 2
+    assert stats["pending"] == 0
+    assert stats["completion_rate"] == 100.0

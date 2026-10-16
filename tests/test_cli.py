@@ -109,3 +109,42 @@ def test_cli_sort_tasks_by_due_date(monkeypatch, capsys, tmp_path):
     assert "Tanpa tenggat" in output
     assert output.index("Tenggat pertama") < output.index("Tenggat kedua")
     assert output.index("Tenggat kedua") < output.index("Tanpa tenggat")
+
+
+def test_cli_display_task_statistics(monkeypatch, capsys, tmp_path):
+    db_path = tmp_path / "cli_statistics.db"
+    init_db(db_path)
+
+    repository = TaskRepository(db_path)
+    service = TaskService(repository)
+
+    task_high = service.create_task("Tugas High", priority="High")
+    service.create_task("Tugas Medium", priority="Medium")
+    service.create_task("Tugas Low", priority="Low")
+
+    service.complete_task(task_high.id)
+
+    inputs = iter(["9", "0"])
+
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda prompt="": next(inputs),
+    )
+    monkeypatch.setattr(
+        "src.task_manager.cli.TaskService",
+        lambda: service,
+    )
+
+    main()
+
+    output = capsys.readouterr().out
+
+    assert "STATISTIK TUGAS" in output
+    assert "Total tugas       : 3" in output
+    assert "Tugas selesai     : 1" in output
+    assert "Belum selesai     : 2" in output
+    assert "Tingkat selesai   : 33.33%" in output
+    assert "High              : 1" in output
+    assert "Medium            : 1" in output
+    assert "Low               : 1" in output
+    assert "Terima kasih" in output
