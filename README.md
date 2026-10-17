@@ -11,17 +11,17 @@ A command-line task management application built with Python and SQLite. This pr
 - Update task information while preserving optional values that are not provided.
 - Mark tasks as completed.
 - Delete tasks.
-- Search tasks by title or description, with case-insensitive matching.
-- Filter tasks by completion status and priority.
-- Sort tasks by priority (`High` to `Low`).
-- Sort tasks by due date, with tasks without due dates placed last.
-- Validate task titles, priorities, and due dates.
 - Store task data in an SQLite database.
 - Automatically initialize the database and migrate existing tables when necessary.
 - Run automated tests with pytest.
 - Run tests automatically through GitHub Actions on pushes and pull requests to the `main` branch.
-- View task statistics, including total tasks, completed tasks, pending tasks, and completion rate.
-- View task counts grouped by priority (`High`, `Medium`, and `Low`).
+- Search tasks by title or description using case-insensitive matching.
+- Filter tasks by completion status and priority.
+- Sort tasks by priority and due date.
+- View task statistics, including total, completed, and pending tasks, completion rate, and priority distribution.
+- Export tasks to CSV files.
+- Import tasks from CSV files with data validation before saving.
+
 
 ## Tech Stack
 
@@ -33,7 +33,6 @@ A command-line task management application built with Python and SQLite. This pr
 
 ## Project Structure
 
-```text
 software-engineering-task-manager/
 ├── .github/
 │   └── workflows/
@@ -42,6 +41,7 @@ software-engineering-task-manager/
 │   └── task_manager/
 │       ├── __init__.py
 │       ├── cli.py
+│       ├── csv_handler.py
 │       ├── database.py
 │       ├── models.py
 │       ├── repository.py
@@ -49,12 +49,12 @@ software-engineering-task-manager/
 ├── tests/
 │   ├── __init__.py
 │   ├── test_cli.py
+│   ├── test_csv_handler.py
 │   └── test_services.py
 ├── data/
 ├── .gitignore
 ├── README.md
 └── requirements.txt
-```
 
 ## Getting Started
 
@@ -108,7 +108,28 @@ The application provides the following menu options:
 | 7 | Filter tasks |
 | 8 | Sort tasks |
 | 9 | View task statistics |
+| 10 | Export tasks to CSV |
+| 11 | Import tasks from CSV |
 | 0 | Exit the application |
+
+### CSV Import and Export
+
+Use menu option `10` to export all tasks to a CSV file. The default output path is `data/tasks_export.csv`. You can also enter a custom file path.
+
+Use menu option `11` to import tasks from a CSV file.
+
+The CSV file must contain these columns:
+
+- `title`
+- `description`
+- `completed`
+- `priority`
+- `due_date`
+
+The `completed` column accepts `true` or `false`. The `priority` column accepts `Low`, `Medium`, or `High`. Due dates must use the `YYYY-MM-DD` format or be left empty.
+
+Imported tasks are added as new records; they do not update existing tasks. The application validates the CSV data before saving imported tasks.
+
 
 ### Task priorities and due dates
 
@@ -144,9 +165,9 @@ Run the complete test suite with:
 python -m pytest -v
 ```
 
-The test suite covers task creation, input validation, updates, preservation of existing priority and due dates, due-date removal, task completion, deletion, searching, filtering, sorting, and CLI interactions.
+The test suite covers task creation, input validation, updates, task completion, deletion, search, filtering, sorting, task statistics, CSV import and export, and CLI interactions.
 
-The current test suite contains 32 tests.
+The current test suite contains 45 tests.
 
 ## Continuous Integration
 
@@ -164,6 +185,7 @@ The application separates responsibilities into modules:
 - **Services:** Implements business logic, searching, filtering, sorting, and input validation.
 - **CLI:** Provides the user interface.
 - **Tests:** Verifies application behavior automatically.
+- **CSV Handler:** Reads, validates, and writes task data in CSV format.
 
 ## Learning Objectives
 

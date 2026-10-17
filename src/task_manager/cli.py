@@ -79,6 +79,8 @@ def main() -> None:
         print("7. Filter tugas")
         print("8. Urutkan tugas")
         print("9. Statistik Tugas")
+        print("10. Ekspor tugas ke CSV")
+        print("11. Impor tugas dari CSV")
         print("0. Keluar")
 
         choice = input("Pilih menu: ").strip()
@@ -234,6 +236,35 @@ def main() -> None:
             print(f"High              : {stats['priority_counts']['High']}")
             print(f"Medium            : {stats['priority_counts']['Medium']}")
             print(f"Low               : {stats['priority_counts']['Low']}")
+
+
+        elif choice == "10":
+            file_path = input(
+                "Lokasi file CSV ekspor [data/tasks_export.csv]: "
+            ).strip() or "data/tasks_export.csv"
+
+            try:
+                count = service.export_tasks_to_csv(file_path)
+                print(
+                    f"Berhasil mengekspor {count} tugas ke {file_path}."
+                )
+            except (OSError, ValueError) as error:
+                print(f"Gagal mengekspor tugas: {error}")
+
+        elif choice == "11":
+            file_path = input(
+                "Lokasi file CSV yang akan diimpor: "
+            ).strip()
+
+            if not file_path:
+                print("Lokasi file tidak boleh kosong.")
+                continue
+
+            try:
+                count = service.import_tasks_from_csv(file_path)
+                print(f"Berhasil mengimpor {count} tugas.")
+            except (OSError, ValueError) as error:
+                print(f"Gagal mengimpor tugas: {error}")
 
         elif choice == "0":
             print("Terima kasih telah menggunakan aplikasi.")

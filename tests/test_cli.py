@@ -148,3 +148,73 @@ def test_cli_display_task_statistics(monkeypatch, capsys, tmp_path):
     assert "Medium            : 1" in output
     assert "Low               : 1" in output
     assert "Terima kasih" in output
+
+
+def test_cli_export_tasks_to_csv(monkeypatch, capsys, tmp_path):
+    db_path = tmp_path / "cli_export.db"
+    init_db(db_path)
+
+    repository = TaskRepository(db_path)
+    service = TaskService(repository)
+    service.create_task(
+        "Belajar CSV",
+        description="Menguji ekspor",
+        priority="High",
+    )
+
+    csv_path = tmp_path / "export.csv"
+    inputs = iter(["10", str(csv_path), "0"])
+
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda prompt="": next(inputs),
+    )
+    monkeypatch.setattr(
+        "src.task_manager.cli.TaskService",
+        lambda: service,
+    )
+
+    main()
+
+    output = capsys.readouterr().out
+
+    assert "Berhasil mengekspor 1 tugas" in output
+    assert csv_path.exists()
+    assert "Belajar CSV" in csv_path.read_text(encoding="utf-8-sig")
+
+
+def test_cli_import_tasks_from_csv(monkeypatch, capsys, tmp_path):
+    db_path = tmp_path / "cli_import.db"
+    init_db(db_path)
+
+    repository = TaskRepository(db_path)
+    service = TaskService(repository)
+
+    csv_path = tmp_path / "import.csv"
+    csv_path.write_text(
+        "title,description,completed,priority,due_date\n"
+        "Tugas Impor,Uji menu impor,false,High,2026-10-20\n",
+        encoding="utf-8",
+    )
+
+    inputs = iter(["11", str(csv_path), "0"])
+
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda prompt="": next(inputs),
+    )
+    monkeypatch.setattr(
+        "src.task_manager.cli.TaskService",
+        lambda: service,
+    )
+
+    main()
+
+    output = capsys.readouterr().out
+    tasks = service.list_tasks()
+
+    assert "Berhasil mengimpor 1 tugas" in output
+    assert len(tasks) == 1
+    assert tasks[0].title == "Tugas Impor"
+    assert tasks[0].priority == "High"
+    assert tasks[0].due_date == "2026-10-20"

@@ -3,6 +3,7 @@ import pytest
 from src.task_manager.database import init_db
 from src.task_manager.repository import TaskRepository
 from src.task_manager.services import TaskService
+from src.task_manager.csv_handler import export_tasks
 
 
 def create_test_service(tmp_path):
@@ -370,3 +371,58 @@ def test_get_task_statistics_when_all_tasks_completed(tmp_path):
     assert stats["completed"] == 2
     assert stats["pending"] == 0
     assert stats["completion_rate"] == 100.0
+
+
+def test_export_tasks_to_csv(tmp_path):
+    service = create_test_service(tmp_path)
+    service.create_task(
+        "Belajar Python",
+        "Mempelajari CSV",
+        "High",
+        "2026-11-01",
+    )
+
+    csv_path = tmp_path / "export.csv"
+    count = service.export_tasks_to_csv(csv_path)
+
+    assert count == 1
+    assert csv_path.exists()
+
+
+def test_import_tasks_from_csv(tmp_path):
+    service = create_test_service(tmp_path)
+    csv_path = tmp_path / "import.csv"
+
+    csv_path.write_text(
+        "title,description,completed,priority,due_date\n"
+        "Belajar Python,Mempelajari CSV,false,High,2026-11-01\n"
+        "Laporan,Sudah selesai,true,Medium,\n",
+        encoding="utf-8",
+    )
+
+    count = service.import_tasks_from_csv(csv_path)
+    tasks = service.list_tasks()
+
+    assert count == 2
+    assert len(tasks) == 2
+    assert tasks[0].title == "Belajar Python"
+    assert tasks[0].priority == "High"
+    assert tasks[0].due_date == "2026-11-01"
+    assert tasks[1].completed is True
+
+
+def test_import_invalid_csv_does_not_save_tasks(tmp_path):
+    service = create_test_service(tmp_path)
+    csv_path = tmp_path / "invalid.csv"
+
+    csv_path.write_text(
+        "title,description,completed,priority,due_date\n"
+        "Tugas valid,Deskripsi,false,High,\n"
+        "Tugas tidak valid,Deskripsi,yes,Medium,\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Status"):
+        service.import_tasks_from_csv(csv_path)
+
+    assert service.list_tasks() == []

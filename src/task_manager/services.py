@@ -1,3 +1,5 @@
+from pathlib import Path
+from .csv_handler import export_tasks, read_tasks
 from datetime import date
 from .models import Task
 from .repository import TaskRepository
@@ -227,3 +229,28 @@ class TaskService:
             "completion_rate": completion_rate,
             "priority_counts": priority_counts,
         }
+
+    def export_tasks_to_csv(self, file_path: str | Path) -> int:
+        """Mengekspor semua tugas ke file CSV."""
+        tasks = self.list_tasks()
+        return export_tasks(tasks, file_path)
+
+    def import_tasks_from_csv(self, file_path: str | Path) -> int:
+        """Mengimpor tugas dari CSV setelah seluruh data valid."""
+        tasks = read_tasks(file_path)
+
+        # Validasi seluruh data sebelum menyimpan tugas apa pun.
+        for task in tasks:
+            task.title = task.title.strip()
+            task.description = task.description.strip()
+            task.priority = self._validate_priority(task.priority)
+            task.due_date = self._validate_due_date(task.due_date)
+
+            if not task.title:
+                raise ValueError("Judul tugas tidak boleh kosong.")
+
+        # Simpan hanya setelah seluruh data berhasil divalidasi.
+        for task in tasks:
+            self.repository.create(task)
+
+        return len(tasks)
