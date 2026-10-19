@@ -1,5 +1,7 @@
-from .database import init_db
+from .backup import backup_database, restore_database
+from .database import DEFAULT_DB_PATH, init_db
 from .services import TaskService
+import sqlite3
 
 
 def display_tasks(service: TaskService) -> None:
@@ -81,6 +83,8 @@ def main() -> None:
         print("9. Statistik Tugas")
         print("10. Ekspor tugas ke CSV")
         print("11. Impor tugas dari CSV")
+        print("12. Backup database")
+        print("13. Restore database")
         print("0. Keluar")
 
         choice = input("Pilih menu: ").strip()
@@ -265,6 +269,41 @@ def main() -> None:
                 print(f"Berhasil mengimpor {count} tugas.")
             except (OSError, ValueError) as error:
                 print(f"Gagal mengimpor tugas: {error}")
+
+        elif choice == "12":
+            backup_path = input(
+                "Lokasi file backup [data/tasks_backup.db]: "
+            ).strip() or "data/tasks_backup.db"
+
+            try:
+                result = backup_database(backup_path)
+                print(f"Backup berhasil disimpan ke {result}.")
+            except (OSError, ValueError, sqlite3.Error) as error:
+                print(f"Gagal membuat backup: {error}")
+
+        elif choice == "13":
+            backup_path = input(
+                "Lokasi file backup yang akan dipulihkan: "
+            ).strip()
+
+            if not backup_path:
+                print("Lokasi file backup tidak boleh kosong.")
+                continue
+
+            confirmation = input(
+                "Restore akan mengganti data saat ini. "
+                "Ketik RESTORE untuk melanjutkan: "
+            ).strip()
+
+            if confirmation != "RESTORE":
+                print("Restore dibatalkan.")
+                continue
+
+            try:
+                restore_database(backup_path)
+                print("Database berhasil dipulihkan.")
+            except (OSError, ValueError, sqlite3.Error) as error:
+                print(f"Gagal memulihkan database: {error}")
 
         elif choice == "0":
             print("Terima kasih telah menggunakan aplikasi.")

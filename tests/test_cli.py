@@ -218,3 +218,83 @@ def test_cli_import_tasks_from_csv(monkeypatch, capsys, tmp_path):
     assert tasks[0].title == "Tugas Impor"
     assert tasks[0].priority == "High"
     assert tasks[0].due_date == "2026-10-20"
+
+
+def test_cli_backup_database(monkeypatch, capsys, tmp_path):
+    from unittest.mock import Mock
+
+    from src.task_manager import cli
+
+    backup_path = tmp_path / "tasks_backup.db"
+    backup_mock = Mock(return_value=backup_path)
+
+    monkeypatch.setattr(cli, "backup_database", backup_mock)
+    monkeypatch.setattr(cli, "init_db", lambda: None)
+    monkeypatch.setattr(cli, "TaskService", lambda: None)
+
+    inputs = iter(["12", str(backup_path), "0"])
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda prompt="": next(inputs),
+    )
+
+    main()
+
+    output = capsys.readouterr().out
+
+    backup_mock.assert_called_once_with(str(backup_path))
+    assert "Backup berhasil disimpan" in output
+
+
+def test_cli_restore_database(monkeypatch, capsys, tmp_path):
+    from unittest.mock import Mock
+
+    from src.task_manager import cli
+
+    backup_path = tmp_path / "tasks_backup.db"
+    restore_mock = Mock()
+
+    monkeypatch.setattr(cli, "restore_database", restore_mock)
+    monkeypatch.setattr(cli, "init_db", lambda: None)
+    monkeypatch.setattr(cli, "TaskService", lambda: None)
+
+    inputs = iter(["13", str(backup_path), "RESTORE", "0"])
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda prompt="": next(inputs),
+    )
+
+    main()
+
+    output = capsys.readouterr().out
+
+    restore_mock.assert_called_once_with(str(backup_path))
+    assert "Database berhasil dipulihkan" in output
+
+
+def test_cli_restore_database_can_be_cancelled(
+    monkeypatch, capsys, tmp_path
+):
+    from unittest.mock import Mock
+
+    from src.task_manager import cli
+
+    backup_path = tmp_path / "tasks_backup.db"
+    restore_mock = Mock()
+
+    monkeypatch.setattr(cli, "restore_database", restore_mock)
+    monkeypatch.setattr(cli, "init_db", lambda: None)
+    monkeypatch.setattr(cli, "TaskService", lambda: None)
+
+    inputs = iter(["13", str(backup_path), "BATAL", "0"])
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda prompt="": next(inputs),
+    )
+
+    main()
+
+    output = capsys.readouterr().out
+
+    restore_mock.assert_not_called()
+    assert "Restore dibatalkan" in output

@@ -21,6 +21,10 @@ A command-line task management application built with Python and SQLite. This pr
 - View task statistics, including total, completed, and pending tasks, completion rate, and priority distribution.
 - Export tasks to CSV files.
 - Import tasks from CSV files with data validation before saving.
+- Database backup dan restore menggunakan SQLite Backup API.
+- Validasi integritas dan skema database sebelum restore.
+- Konfirmasi eksplisit sebelum restore untuk mencegah pemulihan yang tidak disengaja.
+
 
 
 ## Tech Stack
@@ -41,6 +45,7 @@ software-engineering-task-manager/
 │   └── task_manager/
 │       ├── __init__.py
 │       ├── cli.py
+│       ├── backup.py
 │       ├── csv_handler.py
 │       ├── database.py
 │       ├── models.py
@@ -50,7 +55,8 @@ software-engineering-task-manager/
 │   ├── __init__.py
 │   ├── test_cli.py
 │   ├── test_csv_handler.py
-│   └── test_services.py
+│   ├── test_services.py
+│   └── test_backup.py
 ├── data/
 ├── .gitignore
 ├── README.md
@@ -110,6 +116,8 @@ The application provides the following menu options:
 | 9 | View task statistics |
 | 10 | Export tasks to CSV |
 | 11 | Import tasks from CSV |
+| 12 | Back up the database |
+| 13 | Restore the database |
 | 0 | Exit the application |
 
 ### CSV Import and Export
@@ -167,7 +175,7 @@ python -m pytest -v
 
 The test suite covers task creation, input validation, updates, task completion, deletion, search, filtering, sorting, task statistics, CSV import and export, and CLI interactions.
 
-The current test suite contains 45 tests.
+The current test suite contains 55 tests.
 
 ## Continuous Integration
 
@@ -194,3 +202,28 @@ This project is part of a practical software engineering portfolio. It demonstra
 ## License
 
 This project is available for educational and portfolio purposes.
+
+## Backup dan Restore Database
+
+### Membuat Backup
+
+1. Jalankan aplikasi:
+   `python -m src.task_manager.cli`
+2. Pilih menu `12. Backup database`.
+3. Masukkan lokasi file backup atau tekan Enter untuk menggunakan lokasi default:
+   `data/tasks_backup.db`
+
+### Memulihkan Database
+
+1. Pastikan aplikasi tidak sedang digunakan oleh proses lain.
+2. Jalankan aplikasi dan pilih menu `13. Restore database`.
+3. Masukkan lokasi file backup yang akan dipulihkan.
+4. Ketik `RESTORE` untuk mengonfirmasi pemulihan.
+
+**Peringatan:** Restore akan mengganti isi database aktif dengan isi database dari file backup. Pastikan file backup benar dan buat backup terbaru sebelum melakukan restore.
+
+### Menjalankan Pengujian
+
+Jalankan seluruh pengujian dengan perintah:
+
+`python -m pytest -v`
