@@ -1,6 +1,6 @@
 # Software Engineering Task Manager
 
-A command-line task management application built with Python and SQLite. This project demonstrates software engineering practices such as layered architecture, CRUD operations, input validation, database persistence, automated testing, and continuous integration with GitHub Actions.
+A task management application built with Python, SQLite, and FastAPI. It demonstrates software engineering practices including layered architecture, CRUD operations, input validation, persistent storage, automated testing, and continuous integration with GitHub Actions.
 
 ## Features
 
@@ -11,6 +11,7 @@ A command-line task management application built with Python and SQLite. This pr
 - Update task information while preserving optional values that are not provided.
 - Mark tasks as completed.
 - Delete tasks.
+- Access task management functionality through a FastAPI REST API.
 - Store task data in an SQLite database.
 - Automatically initialize the database and migrate existing tables when necessary.
 - Run automated tests with pytest.
@@ -21,9 +22,9 @@ A command-line task management application built with Python and SQLite. This pr
 - View task statistics, including total, completed, and pending tasks, completion rate, and priority distribution.
 - Export tasks to CSV files.
 - Import tasks from CSV files with data validation before saving.
-- Database backup dan restore menggunakan SQLite Backup API.
-- Validasi integritas dan skema database sebelum restore.
-- Konfirmasi eksplisit sebelum restore untuk mencegah pemulihan yang tidak disengaja.
+- Back up and restore the SQLite database using the SQLite Backup API.
+- Validate database integrity and schema before restoring a backup.
+- Require explicit confirmation before restoring a database to prevent accidental data replacement.
 
 
 
@@ -31,8 +32,10 @@ A command-line task management application built with Python and SQLite. This pr
 
 - **Language:** Python 3.11+
 - **Database:** SQLite
-- **Testing:** pytest
-- **Interface:** Command-line interface (CLI)
+- **API Framework:** FastAPI
+- **API Server:** Uvicorn
+- **Testing:** pytest and FastAPI TestClient
+- **Interfaces:** Command-line interface (CLI) and REST API
 - **Continuous Integration:** GitHub Actions
 
 ## Project Structure
@@ -44,6 +47,7 @@ software-engineering-task-manager/
 ├── src/
 │   └── task_manager/
 │       ├── __init__.py
+│       ├── api.py
 │       ├── cli.py
 │       ├── backup.py
 │       ├── csv_handler.py
@@ -53,6 +57,7 @@ software-engineering-task-manager/
 │       └── services.py
 ├── tests/
 │   ├── __init__.py
+│   ├── test_api.py
 │   ├── test_cli.py
 │   ├── test_csv_handler.py
 │   ├── test_services.py
@@ -175,7 +180,7 @@ python -m pytest -v
 
 The test suite covers task creation, input validation, updates, task completion, deletion, search, filtering, sorting, task statistics, CSV import and export, and CLI interactions.
 
-The current test suite contains 55 tests.
+The current test suite contains 61 tests.
 
 ## Continuous Integration
 
@@ -191,9 +196,11 @@ The application separates responsibilities into modules:
 - **Database:** Manages SQLite connections, table initialization, and schema migration.
 - **Repository:** Handles database CRUD operations.
 - **Services:** Implements business logic, searching, filtering, sorting, and input validation.
-- **CLI:** Provides the user interface.
-- **Tests:** Verifies application behavior automatically.
+- **CLI:** Provides the command-line user interface.
+- **REST API:** Exposes task management operations through FastAPI.
+- **Tests:** Verify application behavior automatically, including API endpoints.
 - **CSV Handler:** Reads, validates, and writes task data in CSV format.
+- **Backup:** Creates and restores SQLite database backups with validation.
 
 ## Learning Objectives
 
@@ -203,27 +210,60 @@ This project is part of a practical software engineering portfolio. It demonstra
 
 This project is available for educational and portfolio purposes.
 
-## Backup dan Restore Database
+## Database Backup and Restore
 
-### Membuat Backup
+### Creating a Backup
 
-1. Jalankan aplikasi:
-   `python -m src.task_manager.cli`
-2. Pilih menu `12. Backup database`.
-3. Masukkan lokasi file backup atau tekan Enter untuk menggunakan lokasi default:
-   `data/tasks_backup.db`
+1. Run the application using `python -m src.task_manager.cli`.
+2. Select menu option `12` to back up the database.
+3. Enter a backup file path, or press Enter to use the default path: `data/tasks_backup.db`.
 
-### Memulihkan Database
+### Restoring a Database
 
-1. Pastikan aplikasi tidak sedang digunakan oleh proses lain.
-2. Jalankan aplikasi dan pilih menu `13. Restore database`.
-3. Masukkan lokasi file backup yang akan dipulihkan.
-4. Ketik `RESTORE` untuk mengonfirmasi pemulihan.
+1. Ensure the database is not being used by another process.
+2. Run the application and select menu option `13` to restore the database.
+3. Enter the path of the backup file to restore.
+4. Type `RESTORE` to confirm the operation.
 
-**Peringatan:** Restore akan mengganti isi database aktif dengan isi database dari file backup. Pastikan file backup benar dan buat backup terbaru sebelum melakukan restore.
+**Warning:** Restoring replaces the active database contents with the contents of the backup file. Verify the backup file and create a recent backup before restoring.
 
-### Menjalankan Pengujian
+## REST API
 
-Jalankan seluruh pengujian dengan perintah:
+The project provides a REST API built with FastAPI for managing tasks.
 
-`python -m pytest -v`
+### Running the API
+
+Activate the virtual environment, then run the following commands from the project root directory:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m uvicorn task_manager.api:app --reload
+```
+
+### API Documentation
+
+Once the server is running, open:
+
+- Swagger UI: http://127.0.0.1:8000/docs
+- OpenAPI JSON: http://127.0.0.1:8000/openapi.json
+
+### Endpoint
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/` | Check API status |
+| GET | `/tasks` | Retrieve all tasks |
+| POST | `/tasks` | Create a task |
+| GET | `/tasks/{task_id}` | Retrieve a task by ID |
+| PUT | `/tasks/{task_id}` | Update a task |
+| PATCH | `/tasks/{task_id}/complete` | Mark a task as completed |
+| DELETE | `/tasks/{task_id}` | Delete a task |
+
+### Running Tests
+
+Run the complete test suite with:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m pytest -v
+```
