@@ -1,28 +1,21 @@
-
 import pytest
 from fastapi.testclient import TestClient
 
-from task_manager.api import app, get_task_service
+from task_manager.api import app, get_task_service, get_user_repository
+from task_manager.database import init_db
 from task_manager.repository import TaskRepository
 from task_manager.services import TaskService
-from task_manager.database import init_db
-
+from task_manager.user_repository import UserRepository
 
 
 @pytest.fixture
 def client(tmp_path):
-    """Membuat API client dengan database sementara."""
     db_path = tmp_path / "test_tasks.db"
-
-    # Buat tabel tasks di database khusus pengujian.
     init_db(db_path)
-
-    service = TaskService(
-        repository=TaskRepository(db_path=str(db_path))
-    )
-
+    service = TaskService(repository=TaskRepository(db_path=db_path))
+    users = UserRepository(db_path=db_path)
     app.dependency_overrides[get_task_service] = lambda: service
-
+    app.dependency_overrides[get_user_repository] = lambda: users
     try:
         with TestClient(app) as test_client:
             yield test_client
@@ -30,97 +23,126 @@ def client(tmp_path):
         app.dependency_overrides.clear()
 
 
+def register_and_login(client, username, email):
+    response = client.post("/auth/register", json={
+        "username": username, "email": email, "password": "StrongPass123!"
+    })
+    assert response.status_code == 201, response.text
+    login = client.post("/auth/login", json={
+        "username": username, "password": "StrongPass123!"
+    })
+    assert login.status_code == 200, login.text
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
 def test_root_endpoint(client):
     response = client.get("/")
-
     assert response.status_code == 200
     assert response.json()["message"] == "Task Manager API is running"
 
 
-def test_create_and_list_tasks(client):
-    create_response = client.post(
-        "/tasks",
-        json={
-            "title": "Belajar FastAPI",
-            "description": "Membuat REST API",
-            "priority": "High",
-            "due_date": "2026-10-25",
-        },
-    )
+def test_register_and_login(client):
+    register = client.post("/auth/register", json={
+        "username": "ganno", "email": "ganno@example.com", "password": "StrongPass123!"
+    })
+    assert register.status_code == 201
+    assert "password_hash" not in register.json()
+    login = client.post("/auth/login", json={
+        "username": "ganno", "password": "StrongPass123!"
+    })
+    assert login.status_code == 200
+    assert login.json()["token_type"] == "bearer"
+    assert login.json()["access_token"]
 
-    assert create_response.status_code == 201
-    task = create_response.json()
+
+def test_duplicate_registration_returns_409(client):
+    payload = {"username": "ganno", "email": "ganno@example.com", "password": "StrongPass123!"}
+    assert client.post("/auth/register", json=payload).status_code == 201
+    payload["email"] = "another@example.com"
+    assert client.post("/auth/register", json=payload).status_code == 409
+
+
+def test_login_rejects_wrong_password(client):
+    client.post("/auth/register", json={
+        "username": "ganno", "email": "ganno@example.com", "password": "StrongPass123!"
+    })
+    response = client.post("/auth/login", json={"username": "ganno", "password": "WrongPass123!"})
+    assert response.status_code == 401
+
+
+def test_tasks_require_authentication(client):
+    for method, url in [
+        ("get", "/tasks"),
+        ("post", "/tasks"),
+        ("get", "/tasks/1"),
+        ("put", "/tasks/1"),
+        ("patch", "/tasks/1/complete"),
+        ("delete", "/tasks/1"),
+    ]:
+        if method in {"post", "put"}:
+            response = getattr(client, method)(url, json={})
+        else:
+            response = getattr(client, method)(url)
+        assert response.status_code == 401, (method, url, response.text)
+
+
+def test_crud_tasks_with_authentication(client):
+    headers = register_and_login(client, "user_one", "one@example.com")
+    created = client.post("/tasks", headers=headers, json={
+        "title": "Belajar FastAPI", "description": "REST API", "priority": "High",
+        "due_date": "2026-10-25",
+    })
+    assert created.status_code == 201, created.text
+    task = created.json()
     assert task["title"] == "Belajar FastAPI"
-    assert task["priority"] == "High"
     assert task["completed"] is False
 
-    list_response = client.get("/tasks")
+    listed = client.get("/tasks", headers=headers)
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()] == [task["id"]]
 
-    assert list_response.status_code == 200
-    assert len(list_response.json()) == 1
-    assert list_response.json()[0]["id"] == task["id"]
+    updated = client.put(f"/tasks/{task['id']}", headers=headers, json={
+        "title": "Updated task", "description": "Edited", "priority": "Medium",
+        "due_date": None,
+    })
+    assert updated.status_code == 200
+    assert updated.json()["title"] == "Updated task"
+
+    completed = client.patch(f"/tasks/{task['id']}/complete", headers=headers)
+    assert completed.status_code == 200
+    assert completed.json()["completed"] is True
+
+    deleted = client.delete(f"/tasks/{task['id']}", headers=headers)
+    assert deleted.status_code == 204
+    assert client.get(f"/tasks/{task['id']}", headers=headers).status_code == 404
 
 
-def test_get_nonexistent_task_returns_404(client):
-    response = client.get("/tasks/9999")
+def test_user_cannot_access_another_users_task(client):
+    headers_one = register_and_login(client, "user_one", "one@example.com")
+    headers_two = register_and_login(client, "user_two", "two@example.com")
+    created = client.post("/tasks", headers=headers_one, json={"title": "Private task"})
+    task_id = created.json()["id"]
 
-    assert response.status_code == 404
-
-
-def test_update_complete_and_delete_task(client):
-    create_response = client.post(
-        "/tasks",
-        json={"title": "Tugas awal"},
-    )
-    task_id = create_response.json()["id"]
-
-    update_response = client.put(
-        f"/tasks/{task_id}",
-        json={
-            "title": "Tugas diperbarui",
-            "description": "Sudah diedit",
-            "priority": "High",
-            "due_date": None,
-        },
-    )
-
-    assert update_response.status_code == 200
-    assert update_response.json()["title"] == "Tugas diperbarui"
-
-    complete_response = client.patch(
-        f"/tasks/{task_id}/complete"
-    )
-
-    assert complete_response.status_code == 200
-    assert complete_response.json()["completed"] is True
-
-    delete_response = client.delete(f"/tasks/{task_id}")
-
-    assert delete_response.status_code == 204
-
-    missing_response = client.get(f"/tasks/{task_id}")
-    assert missing_response.status_code == 404
+    assert client.get(f"/tasks/{task_id}", headers=headers_two).status_code == 404
+    assert client.put(f"/tasks/{task_id}", headers=headers_two, json={
+        "title": "Hijack", "description": "", "priority": "High", "due_date": None
+    }).status_code == 404
+    assert client.patch(f"/tasks/{task_id}/complete", headers=headers_two).status_code == 404
+    assert client.delete(f"/tasks/{task_id}", headers=headers_two).status_code == 404
+    assert client.get("/tasks", headers=headers_two).json() == []
 
 
 def test_create_task_rejects_invalid_priority(client):
-    response = client.post(
-        "/tasks",
-        json={
-            "title": "Tugas invalid",
-            "priority": "Urgent",
-        },
-    )
-
+    headers = register_and_login(client, "user_one", "one@example.com")
+    response = client.post("/tasks", headers=headers, json={
+        "title": "Invalid priority", "priority": "Urgent"
+    })
     assert response.status_code == 422
 
 
 def test_create_task_rejects_invalid_due_date(client):
-    response = client.post(
-        "/tasks",
-        json={
-            "title": "Tugas dengan tanggal invalid",
-            "due_date": "25-10-2026",
-        },
-    )
-
+    headers = register_and_login(client, "user_one", "one@example.com")
+    response = client.post("/tasks", headers=headers, json={
+        "title": "Invalid date", "due_date": "25-10-2026"
+    })
     assert response.status_code == 422

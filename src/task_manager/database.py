@@ -1,25 +1,20 @@
-
 import sqlite3
 from pathlib import Path
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "tasks.db"
 
 
 def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
-    """Membuat koneksi ke database SQLite."""
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-
     connection = sqlite3.connect(path)
     connection.row_factory = sqlite3.Row
-
     return connection
 
 
 def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
-    """Membuat tabel tasks dan memperbarui skema jika diperlukan."""
+    """Create and safely migrate the SQLite schema without deleting data."""
     with get_connection(db_path) as connection:
         connection.execute(
             """
@@ -32,26 +27,27 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
             )
             """
         )
-
         columns = {
             row["name"]
-            for row in connection.execute(
-                "PRAGMA table_info(tasks)"
-            ).fetchall()
+            for row in connection.execute("PRAGMA table_info(tasks)").fetchall()
         }
-
         if "priority" not in columns:
             connection.execute(
-                """
-                ALTER TABLE tasks
-                ADD COLUMN priority TEXT NOT NULL DEFAULT 'Medium'
-                """
+                "ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'Medium'"
             )
-
         if "due_date" not in columns:
-            connection.execute(
-                """
-                ALTER TABLE tasks
-                ADD COLUMN due_date TEXT
-                """
+            connection.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT")
+        if "user_id" not in columns:
+            connection.execute("ALTER TABLE tasks ADD COLUMN user_id INTEGER REFERENCES users(id)")
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
+            """
+        )
