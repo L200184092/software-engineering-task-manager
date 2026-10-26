@@ -23,3 +23,6 @@ backup/
 .vscode/
 
 data/*.csv
+.env
+.env.*
+!.env.example

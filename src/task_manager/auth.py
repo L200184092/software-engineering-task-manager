@@ -1,16 +1,20 @@
-
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import jwt
+from dotenv import load_dotenv
 from pwdlib import PasswordHash
 
+
+# Load environment variables from the project's .env file.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(PROJECT_ROOT / ".env")
 
 password_hash = PasswordHash.recommended()
 
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
 
 def get_secret_key() -> str:
     """Return the JWT secret key from the environment."""
