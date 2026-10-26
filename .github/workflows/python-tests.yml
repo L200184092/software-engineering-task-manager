@@ -26,4 +26,6 @@ jobs:
       - name: Run tests
         env:
           PYTHONPATH: src
+          TASK_MANAGER_SECRET_KEY: ${{ secrets.TASK_MANAGER_SECRET_KEY }}
         run: python -m pytest -v
+        
