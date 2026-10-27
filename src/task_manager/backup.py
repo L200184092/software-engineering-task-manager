@@ -69,19 +69,14 @@ def restore_database(
             ).fetchall()
         }
 
-        if "tasks" not in tables:
+        required_tables = {"tasks", "users"}
+
+        if not required_tables.issubset(tables):
             raise ValueError(
-                "File backup tidak memiliki tabel tasks."
+                "File backup harus memiliki tabel tasks dan users."
             )
 
-        columns = {
-            row[1]
-            for row in backup_connection.execute(
-                "PRAGMA table_info(tasks)"
-            ).fetchall()
-        }
-
-        required_columns = {
+        required_task_columns = {
             "id",
             "title",
             "description",
@@ -89,11 +84,55 @@ def restore_database(
             "created_at",
             "priority",
             "due_date",
+            "user_id",
         }
 
-        if not required_columns.issubset(columns):
+        task_columns = {
+            row[1]
+            for row in backup_connection.execute(
+                "PRAGMA table_info(tasks)"
+            ).fetchall()
+        }
+
+        if not required_task_columns.issubset(task_columns):
             raise ValueError(
                 "Skema tabel tasks pada backup tidak sesuai."
+            )
+
+        required_user_columns = {
+            "id",
+            "username",
+            "email",
+            "password_hash",
+            "created_at",
+        }
+
+        user_columns = {
+            row[1]
+            for row in backup_connection.execute(
+                "PRAGMA table_info(users)"
+            ).fetchall()
+        }
+
+        if not required_user_columns.issubset(user_columns):
+            raise ValueError(
+                "Skema tabel users pada backup tidak sesuai."
+            )
+
+        foreign_keys = backup_connection.execute(
+            "PRAGMA foreign_key_list(tasks)"
+        ).fetchall()
+
+        has_user_foreign_key = any(
+            row[2] == "users"
+            and row[3] == "user_id"
+            and row[4] == "id"
+            for row in foreign_keys
+        )
+
+        if not has_user_foreign_key:
+            raise ValueError(
+                "Relasi tasks.user_id ke users.id tidak ditemukan."
             )
 
     # Pulihkan melalui SQLite Backup API tanpa mengganti file aktif.

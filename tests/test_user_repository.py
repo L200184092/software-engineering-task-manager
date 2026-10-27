@@ -1,6 +1,8 @@
 
 import pytest
+import sqlite3
 
+from task_manager.database import get_connection
 from task_manager.auth import hash_password
 from task_manager.models import User
 from task_manager.user_repository import UserRepository
@@ -26,13 +28,11 @@ def test_create_and_find_user(tmp_path):
         "ganno_test"
     )
 
-
 def test_find_missing_user_returns_none(tmp_path):
     repository = UserRepository(tmp_path / "test_users.db")
 
     assert repository.get_by_username("tidak_ada") is None
     assert repository.get_by_email("missing@example.com") is None
-
 
 def test_duplicate_username_is_rejected(tmp_path):
     repository = UserRepository(tmp_path / "test_users.db")
@@ -50,5 +50,22 @@ def test_duplicate_username_is_rejected(tmp_path):
 
     repository.create(first_user)
 
-    with pytest.raises(Exception):
+    with pytest.raises(sqlite3.IntegrityError):
         repository.create(second_user)
+
+def test_foreign_key_rejects_nonexistent_user(tmp_path):
+    db_path = tmp_path / "test_foreign_keys.db"
+
+    # Membuat database beserta tabel melalui repository.
+    UserRepository(db_path)
+
+    # Tugas tidak boleh merujuk ke pengguna yang tidak ada.
+    with get_connection(db_path) as connection:
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """
+                INSERT INTO tasks (title, user_id)
+                VALUES (?, ?)
+                """,
+                ("Tugas dengan pengguna tidak valid", 999999),
+            )
