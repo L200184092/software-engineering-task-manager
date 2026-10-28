@@ -1,6 +1,6 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
-
 from task_manager.api import app, get_task_service, get_user_repository
 from task_manager.database import init_db
 from task_manager.repository import TaskRepository
@@ -85,6 +85,88 @@ def test_tasks_require_authentication(client):
             response = getattr(client, method)(url)
         assert response.status_code == 401, (method, url, response.text)
 
+def test_tasks_reject_expired_token(client):
+    import jwt
+    from datetime import datetime, timedelta, timezone
+
+    from task_manager.auth import get_secret_key, JWT_ALGORITHM
+
+    expired_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+    token = jwt.encode(
+        {
+            "sub": "1",
+            "iat": expired_at - timedelta(minutes=30),
+            "exp": expired_at,
+        },
+        get_secret_key(),
+        algorithm=JWT_ALGORITHM,
+    )
+
+    response = client.get(
+        "/tasks",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_tasks_reject_invalid_signature(client):
+    import jwt
+
+    from task_manager.auth import JWT_ALGORITHM
+
+    token = jwt.encode(
+        {
+            "sub": "1",
+            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=30),
+        },
+        "invalid-test-secret-key-at-least-32-bytes",
+        algorithm=JWT_ALGORITHM,
+    )
+
+    response = client.get(
+        "/tasks",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_tasks_reject_token_missing_required_claim(client):
+    import jwt
+    from datetime import datetime, timedelta, timezone
+
+    from task_manager.auth import get_secret_key, JWT_ALGORITHM
+
+    token = jwt.encode(
+        {
+            "sub": "1",
+            "iat": datetime.now(timezone.utc),
+        },
+        get_secret_key(),
+        algorithm=JWT_ALGORITHM,
+    )
+
+    response = client.get(
+        "/tasks",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_tasks_reject_nonexistent_user_token(client):
+    from task_manager.auth import create_access_token
+
+    token = create_access_token("999999999")
+
+    response = client.get(
+        "/tasks",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
 
 def test_crud_tasks_with_authentication(client):
     headers = register_and_login(client, "user_one", "one@example.com")
