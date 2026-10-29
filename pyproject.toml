@@ -7,6 +7,15 @@ name = "software-engineering-task-manager"
 version = "0.1.0"
 description = "A task manager application with CLI, REST API, and SQLite"
 requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "slowapi",
+    "PyJWT",
+    "pwdlib[argon2]",
+    "sqlalchemy",
+    "python-multipart",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
