@@ -1,11 +1,10 @@
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import jwt
 from dotenv import load_dotenv
 from pwdlib import PasswordHash
-
 
 # Load environment variables from the project's .env file.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -43,7 +42,7 @@ def create_access_token(
     expires_delta: timedelta | None = None,
 ) -> str:
     """Create a signed JWT access token."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = now + (
         expires_delta
         if expires_delta is not None

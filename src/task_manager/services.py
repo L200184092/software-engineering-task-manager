@@ -1,6 +1,8 @@
-from pathlib import Path
-from .csv_handler import export_tasks, read_tasks
 from datetime import date
+from pathlib import Path
+from typing import ClassVar
+
+from .csv_handler import export_tasks, read_tasks
 from .models import Task
 from .repository import TaskRepository
 
@@ -9,7 +11,7 @@ _UNSET = object()
 class TaskService:
     """Menangani logika bisnis dan validasi tugas."""
 
-    VALID_PRIORITIES = {"Low", "Medium", "High"}
+    VALID_PRIORITIES: ClassVar[set[str]] = {"Low", "Medium", "High"}
 
     def __init__(self, repository: TaskRepository | None = None) -> None:
         self.repository = repository or TaskRepository()

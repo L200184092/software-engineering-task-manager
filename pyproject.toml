@@ -23,6 +23,7 @@ dependencies = [
 test = [
     "pytest",
     "httpx2",
+    "ruff",
 ]
 
 [tool.setuptools]
@@ -30,3 +31,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff.lint]
+ignore = ["B008"]

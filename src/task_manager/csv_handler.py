@@ -1,9 +1,8 @@
-from datetime import date
 import csv
+from datetime import date
 from pathlib import Path
 
 from .models import Task
-
 
 CSV_FIELDS = [
     "title",

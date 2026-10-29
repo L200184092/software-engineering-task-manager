@@ -1,6 +1,8 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
+
 from task_manager.api import app, get_task_service, get_user_repository, limiter
 from task_manager.database import init_db
 from task_manager.repository import TaskRepository
@@ -107,12 +109,13 @@ def test_tasks_require_authentication(client):
         assert response.status_code == 401, (method, url, response.text)
 
 def test_tasks_reject_expired_token(client):
+    from datetime import datetime, timedelta
+
     import jwt
-    from datetime import datetime, timedelta, timezone
 
-    from task_manager.auth import get_secret_key, JWT_ALGORITHM
+    from task_manager.auth import JWT_ALGORITHM, get_secret_key
 
-    expired_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+    expired_at = datetime.now(UTC) - timedelta(minutes=5)
     token = jwt.encode(
         {
             "sub": "1",
@@ -139,8 +142,8 @@ def test_tasks_reject_invalid_signature(client):
     token = jwt.encode(
         {
             "sub": "1",
-            "iat": datetime.now(timezone.utc),
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=30),
+            "iat": datetime.now(UTC),
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
         },
         "invalid-test-secret-key-at-least-32-bytes",
         algorithm=JWT_ALGORITHM,
@@ -155,15 +158,16 @@ def test_tasks_reject_invalid_signature(client):
 
 
 def test_tasks_reject_token_missing_required_claim(client):
-    import jwt
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime
 
-    from task_manager.auth import get_secret_key, JWT_ALGORITHM
+    import jwt
+
+    from task_manager.auth import JWT_ALGORITHM, get_secret_key
 
     token = jwt.encode(
         {
             "sub": "1",
-            "iat": datetime.now(timezone.utc),
+            "iat": datetime.now(UTC),
         },
         get_secret_key(),
         algorithm=JWT_ALGORITHM,
@@ -179,9 +183,9 @@ def test_tasks_reject_token_missing_required_claim(client):
 def test_tasks_reject_token_issued_in_future(client):
     import jwt
 
-    from task_manager.auth import get_secret_key, JWT_ALGORITHM
+    from task_manager.auth import JWT_ALGORITHM, get_secret_key
 
-    future_iat = datetime.now(timezone.utc) + timedelta(hours=1)
+    future_iat = datetime.now(UTC) + timedelta(hours=1)
 
     token = jwt.encode(
         {

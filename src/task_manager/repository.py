@@ -1,4 +1,3 @@
-import sqlite3
 from pathlib import Path
 
 from .database import DEFAULT_DB_PATH, get_connection, init_db

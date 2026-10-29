@@ -1,9 +1,10 @@
 
-import pytest
 import sqlite3
 
-from task_manager.database import get_connection
+import pytest
+
 from task_manager.auth import hash_password
+from task_manager.database import get_connection
 from task_manager.models import User
 from task_manager.user_repository import UserRepository
 
@@ -60,12 +61,13 @@ def test_foreign_key_rejects_nonexistent_user(tmp_path):
     UserRepository(db_path)
 
     # Tugas tidak boleh merujuk ke pengguna yang tidak ada.
-    with get_connection(db_path) as connection:
-        with pytest.raises(sqlite3.IntegrityError):
-            connection.execute(
-                """
-                INSERT INTO tasks (title, user_id)
-                VALUES (?, ?)
-                """,
-                ("Tugas dengan pengguna tidak valid", 999999),
-            )
+    with get_connection(db_path) as connection, pytest.raises(
+        sqlite3.IntegrityError
+    ):
+        connection.execute(
+            """
+            INSERT INTO tasks (title, user_id)
+            VALUES (?, ?)
+            """,
+            ("Tugas dengan pengguna tidak valid", 999999),
+        )

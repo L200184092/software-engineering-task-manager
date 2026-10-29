@@ -1,9 +1,9 @@
 
 import pytest
+
 from src.task_manager.database import init_db
 from src.task_manager.repository import TaskRepository
 from src.task_manager.services import TaskService
-from src.task_manager.csv_handler import export_tasks
 
 
 def create_test_service(tmp_path):
@@ -143,7 +143,7 @@ def test_update_task_priority_and_due_date(tmp_path):
 def test_task_default_priority_and_due_date(tmp_path):
     service = create_test_service(tmp_path)
 
-    task = service.create_task("Tugas tanpa tenggat")
+    service.create_task("Tugas tanpa tenggat")
 
     saved_task = service.list_tasks()[0]
 

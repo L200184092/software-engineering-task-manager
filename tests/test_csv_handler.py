@@ -1,7 +1,8 @@
-import csv
 import pytest
+
 from src.task_manager.csv_handler import export_tasks, read_tasks
 from src.task_manager.models import Task
+
 
 def test_export_and_read_tasks_round_trip(tmp_path):
     csv_path = tmp_path / "tasks.csv"

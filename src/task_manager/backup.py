@@ -25,9 +25,10 @@ def backup_database(
 
     destination.parent.mkdir(parents=True, exist_ok=True)
 
-    with closing(get_connection(source)) as source_connection:
-        with closing(sqlite3.connect(destination)) as backup_connection:
-            source_connection.backup(backup_connection)
+    with closing(get_connection(source)) as source_connection, closing(
+        sqlite3.connect(destination)
+    ) as backup_connection:
+        source_connection.backup(backup_connection)
 
     return destination
 
@@ -138,6 +139,7 @@ def restore_database(
     # Pulihkan melalui SQLite Backup API tanpa mengganti file aktif.
     destination.parent.mkdir(parents=True, exist_ok=True)
 
-    with closing(sqlite3.connect(source)) as source_connection:
-        with closing(get_connection(destination)) as destination_connection:
-            source_connection.backup(destination_connection)
+    with closing(sqlite3.connect(source)) as source_connection, closing(
+        get_connection(destination)
+    ) as destination_connection:
+        source_connection.backup(destination_connection)

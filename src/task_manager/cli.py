@@ -1,7 +1,8 @@
-from .backup import backup_database, restore_database
-from .database import DEFAULT_DB_PATH, init_db
-from .services import TaskService
 import sqlite3
+
+from .backup import backup_database, restore_database
+from .database import init_db
+from .services import TaskService
 
 
 def display_tasks(service: TaskService) -> None:

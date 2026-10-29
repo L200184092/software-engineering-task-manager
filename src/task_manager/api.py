@@ -1,13 +1,20 @@
 
 import sqlite3
+
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from .auth import create_access_token, decode_access_token, hash_password, verify_password
+
+from .auth import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
 from .database import get_connection
 from .models import Task, User
 from .repository import TaskRepository
@@ -225,4 +232,3 @@ def delete_task(task_id: int, user: User = Depends(get_current_user),
                 service: TaskService = Depends(get_task_service)):
     if not service.repository.delete_for_user(task_id, user.id):
         raise HTTPException(status_code=404, detail="Task not found")
-    return None

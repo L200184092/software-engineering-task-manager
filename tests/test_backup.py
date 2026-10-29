@@ -1,9 +1,10 @@
 
 import sqlite3
+
 import pytest
 
 from src.task_manager.backup import backup_database, restore_database
-from src.task_manager.database import init_db, get_connection
+from src.task_manager.database import get_connection, init_db
 
 
 def add_task(db_path, title):
