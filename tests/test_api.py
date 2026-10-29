@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
-from task_manager.api import app, get_task_service, get_user_repository
+from task_manager.api import app, get_task_service, get_user_repository, limiter
 from task_manager.database import init_db
 from task_manager.repository import TaskRepository
 from task_manager.services import TaskService
@@ -10,12 +10,19 @@ from task_manager.user_repository import UserRepository
 
 @pytest.fixture
 def client(tmp_path):
+    limiter.reset()
+
     db_path = tmp_path / "test_tasks.db"
     init_db(db_path)
-    service = TaskService(repository=TaskRepository(db_path=db_path))
+
+    service = TaskService(
+        repository=TaskRepository(db_path=db_path)
+    )
     users = UserRepository(db_path=db_path)
+
     app.dependency_overrides[get_task_service] = lambda: service
     app.dependency_overrides[get_user_repository] = lambda: users
+
     try:
         with TestClient(app) as test_client:
             yield test_client
@@ -69,6 +76,20 @@ def test_login_rejects_wrong_password(client):
     response = client.post("/auth/login", json={"username": "ganno", "password": "WrongPass123!"})
     assert response.status_code == 401
 
+def test_login_rate_limit(client):
+    payload = {
+        "username": "unknown_user",
+        "password": "WrongPass123!",
+    }
+
+    # Lima permintaan pertama harus diproses.
+    for _ in range(5):
+        response = client.post("/auth/login", json=payload)
+        assert response.status_code == 401, response.text
+
+    # Permintaan keenam harus dibatasi.
+    response = client.post("/auth/login", json=payload)
+    assert response.status_code == 429, response.text
 
 def test_tasks_require_authentication(client):
     for method, url in [
@@ -155,6 +176,29 @@ def test_tasks_reject_token_missing_required_claim(client):
 
     assert response.status_code == 401
 
+def test_tasks_reject_token_issued_in_future(client):
+    import jwt
+
+    from task_manager.auth import get_secret_key, JWT_ALGORITHM
+
+    future_iat = datetime.now(timezone.utc) + timedelta(hours=1)
+
+    token = jwt.encode(
+        {
+            "sub": "1",
+            "iat": future_iat,
+            "exp": future_iat + timedelta(minutes=30),
+        },
+        get_secret_key(),
+        algorithm=JWT_ALGORITHM,
+    )
+
+    response = client.get(
+        "/tasks",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
 
 def test_tasks_reject_nonexistent_user_token(client):
     from task_manager.auth import create_access_token

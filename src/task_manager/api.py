@@ -1,10 +1,12 @@
-import sqlite3
 
+import sqlite3
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-
 from .auth import create_access_token, decode_access_token, hash_password, verify_password
 from .database import get_connection
 from .models import Task, User
@@ -17,6 +19,14 @@ app = FastAPI(
     description="REST API untuk mengelola tugas menggunakan SQLite dengan JWT.",
     version="1.1.0",
 )
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler,
+)
+
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -125,12 +135,27 @@ def register(payload: RegisterRequest, users: UserRepository = Depends(get_user_
 
 
 @app.post("/auth/login", response_model=TokenResponse)
-def login(payload: LoginRequest, users: UserRepository = Depends(get_user_repository)):
+@limiter.limit("5/minute")
+def login(
+    request: Request,
+    payload: LoginRequest,
+    users: UserRepository = Depends(get_user_repository),
+):
     user = users.get_by_username(payload.username)
-    if user is None or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Incorrect username or password",
-                            headers={"WWW-Authenticate": "Bearer"})
-    return TokenResponse(access_token=create_access_token(str(user.id)))
+
+    if user is None or not verify_password(
+        payload.password,
+        user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return TokenResponse(
+        access_token=create_access_token(str(user.id))
+    )
 
 
 @app.get("/tasks", response_model=list[TaskResponse])
