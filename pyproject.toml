@@ -15,6 +15,13 @@ dependencies = [
     "pwdlib[argon2]",
     "sqlalchemy",
     "python-multipart",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "httpx2",
 ]
 
 [tool.setuptools]
