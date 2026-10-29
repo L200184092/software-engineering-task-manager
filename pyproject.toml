@@ -16,6 +16,7 @@ dependencies = [
     "sqlalchemy",
     "python-multipart",
     "python-dotenv",
+    "email-validator",
 ]
 
 [project.optional-dependencies]
