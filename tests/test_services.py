@@ -1,4 +1,3 @@
-
 import pytest
 
 from src.task_manager.database import init_db
@@ -150,6 +149,7 @@ def test_task_default_priority_and_due_date(tmp_path):
     assert saved_task.priority == "Medium"
     assert saved_task.due_date is None
 
+
 def test_create_task_rejects_invalid_priority(tmp_path):
     service = create_test_service(tmp_path)
 
@@ -199,9 +199,7 @@ def test_update_task_preserves_priority_and_due_date_when_omitted(
     assert result is True
 
     updated_task = next(
-        item
-        for item in task_service.list_tasks()
-        if item.id == task.id
+        item for item in task_service.list_tasks() if item.id == task.id
     )
 
     assert updated_task.title == "Belajar Python Lanjutan"
@@ -227,9 +225,7 @@ def test_update_task_can_clear_due_date(tmp_path):
     assert result is True
 
     updated_task = next(
-        item
-        for item in task_service.list_tasks()
-        if item.id == task.id
+        item for item in task_service.list_tasks() if item.id == task.id
     )
 
     assert updated_task.due_date is None
@@ -315,7 +311,6 @@ def test_sort_tasks_by_due_date_puts_missing_dates_last(tmp_path):
         "Tenggat kedua",
         "Tanpa tenggat",
     ]
-
 
 
 def test_get_task_statistics(tmp_path):

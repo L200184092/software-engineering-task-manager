@@ -14,8 +14,11 @@ class TaskRepository:
     @staticmethod
     def _task(row) -> Task:
         return Task(
-            id=row["id"], title=row["title"], description=row["description"],
-            completed=bool(row["completed"]), priority=row["priority"],
+            id=row["id"],
+            title=row["title"],
+            description=row["description"],
+            completed=bool(row["completed"]),
+            priority=row["priority"],
             due_date=row["due_date"],
         )
 
@@ -25,11 +28,23 @@ class TaskRepository:
             cursor = connection.execute(
                 """INSERT INTO tasks (title, description, completed, priority, due_date)
                    VALUES (?, ?, ?, ?, ?)""",
-                (task.title, task.description, int(task.completed), task.priority, task.due_date),
+                (
+                    task.title,
+                    task.description,
+                    int(task.completed),
+                    task.priority,
+                    task.due_date,
+                ),
             )
             task_id = cursor.lastrowid
-        return Task(id=task_id, title=task.title, description=task.description,
-                    completed=task.completed, priority=task.priority, due_date=task.due_date)
+        return Task(
+            id=task_id,
+            title=task.title,
+            description=task.description,
+            completed=task.completed,
+            priority=task.priority,
+            due_date=task.due_date,
+        )
 
     def get_all(self) -> list[Task]:
         with get_connection(self.db_path) as connection:
@@ -46,7 +61,14 @@ class TaskRepository:
             cursor = connection.execute(
                 """UPDATE tasks SET title=?, description=?, completed=?, priority=?, due_date=?
                    WHERE id=?""",
-                (task.title, task.description, int(task.completed), task.priority, task.due_date, task.id),
+                (
+                    task.title,
+                    task.description,
+                    int(task.completed),
+                    task.priority,
+                    task.due_date,
+                    task.id,
+                ),
             )
         return cursor.rowcount > 0
 
@@ -61,12 +83,20 @@ class TaskRepository:
             cursor = connection.execute(
                 """INSERT INTO tasks (title, description, completed, priority, due_date, user_id)
                    VALUES (?, ?, ?, ?, ?, ?)""",
-                (task.title, task.description, int(task.completed), task.priority, task.due_date, user_id),
+                (
+                    task.title,
+                    task.description,
+                    int(task.completed),
+                    task.priority,
+                    task.due_date,
+                    user_id,
+                ),
             )
             task_id = cursor.lastrowid
             row = connection.execute(
                 """SELECT id, title, description, completed, priority, due_date
-                   FROM tasks WHERE id=? AND user_id=?""", (task_id, user_id)
+                   FROM tasks WHERE id=? AND user_id=?""",
+                (task_id, user_id),
             ).fetchone()
         return self._task(row)
 
@@ -74,7 +104,8 @@ class TaskRepository:
         with get_connection(self.db_path) as connection:
             rows = connection.execute(
                 """SELECT id, title, description, completed, priority, due_date
-                   FROM tasks WHERE user_id=? ORDER BY id""", (user_id,)
+                   FROM tasks WHERE user_id=? ORDER BY id""",
+                (user_id,),
             ).fetchall()
         return [self._task(row) for row in rows]
 
@@ -82,12 +113,21 @@ class TaskRepository:
         with get_connection(self.db_path) as connection:
             row = connection.execute(
                 """SELECT id, title, description, completed, priority, due_date
-                   FROM tasks WHERE id=? AND user_id=?""", (task_id, user_id)
+                   FROM tasks WHERE id=? AND user_id=?""",
+                (task_id, user_id),
             ).fetchone()
         return self._task(row) if row else None
 
-    def update_for_user(self, task_id: int, user_id: int, *, title: str,
-                        description: str, priority: str, due_date: str | None) -> bool:
+    def update_for_user(
+        self,
+        task_id: int,
+        user_id: int,
+        *,
+        title: str,
+        description: str,
+        priority: str,
+        due_date: str | None,
+    ) -> bool:
         with get_connection(self.db_path) as connection:
             cursor = connection.execute(
                 """UPDATE tasks SET title=?, description=?, priority=?, due_date=?
@@ -99,7 +139,8 @@ class TaskRepository:
     def complete_for_user(self, task_id: int, user_id: int) -> bool:
         with get_connection(self.db_path) as connection:
             cursor = connection.execute(
-                "UPDATE tasks SET completed=1 WHERE id=? AND user_id=?", (task_id, user_id)
+                "UPDATE tasks SET completed=1 WHERE id=? AND user_id=?",
+                (task_id, user_id),
             )
         return cursor.rowcount > 0
 

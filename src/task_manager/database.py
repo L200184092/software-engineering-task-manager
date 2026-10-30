@@ -57,9 +57,7 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
             )
 
         if "due_date" not in columns:
-            connection.execute(
-                "ALTER TABLE tasks ADD COLUMN due_date TEXT"
-            )
+            connection.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT")
 
         if "user_id" not in columns:
             connection.execute(

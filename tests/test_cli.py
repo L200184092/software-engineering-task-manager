@@ -1,4 +1,3 @@
-
 from src.task_manager.cli import main
 from src.task_manager.database import init_db
 from src.task_manager.repository import TaskRepository
@@ -14,15 +13,17 @@ def test_cli_add_and_list_task(monkeypatch, capsys, tmp_path):
     service = TaskService(repository)
 
     # Simulasikan input pengguna.
-    inputs = iter([
-        "1",
-        "Belajar pytest",
-        "Latihan CLI",
-        "High",
-        "2026-10-20",
-        "2",
-        "0",
-    ])
+    inputs = iter(
+        [
+            "1",
+            "Belajar pytest",
+            "Latihan CLI",
+            "High",
+            "2026-10-20",
+            "2",
+            "0",
+        ]
+    )
 
     monkeypatch.setattr(
         "builtins.input",
@@ -43,6 +44,7 @@ def test_cli_add_and_list_task(monkeypatch, capsys, tmp_path):
     assert "Prioritas: High" in output
     assert "Tenggat: 2026-10-20" in output
     assert "Terima kasih" in output
+
 
 def test_cli_sort_tasks_by_priority(monkeypatch, capsys, tmp_path):
     db_path = tmp_path / "cli_sort_priority.db"
@@ -272,9 +274,7 @@ def test_cli_restore_database(monkeypatch, capsys, tmp_path):
     assert "Database berhasil dipulihkan" in output
 
 
-def test_cli_restore_database_can_be_cancelled(
-    monkeypatch, capsys, tmp_path
-):
+def test_cli_restore_database_can_be_cancelled(monkeypatch, capsys, tmp_path):
     from unittest.mock import Mock
 
     from src.task_manager import cli

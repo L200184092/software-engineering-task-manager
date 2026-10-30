@@ -43,12 +43,11 @@ def display_task_results(tasks) -> None:
         if task.description:
             print(f"    Deskripsi: {task.description}")
 
+
 def ask_priority(current_priority: str = "Medium") -> str:
     """Meminta prioritas tugas dari pengguna."""
     print("Pilihan prioritas: Low, Medium, High")
-    priority = input(
-        f"Prioritas [{current_priority}]: "
-    ).strip()
+    priority = input(f"Prioritas [{current_priority}]: ").strip()
 
     return priority or current_priority
 
@@ -57,8 +56,7 @@ def ask_due_date(current_due_date: str | None = None) -> str | None:
     """Meminta tenggat tugas; input kosong mempertahankan nilai saat ini."""
     current_value = current_due_date or "Tidak ada"
     due_date = input(
-        f"Tenggat YYYY-MM-DD [{current_value}] "
-        "(kosongkan untuk mempertahankan): "
+        f"Tenggat YYYY-MM-DD [{current_value}] (kosongkan untuk mempertahankan): "
     ).strip()
 
     if not due_date:
@@ -94,9 +92,9 @@ def main() -> None:
             title = input("Judul tugas: ")
             description = input("Deskripsi tugas (opsional): ")
             priority = ask_priority()
-            due_date = input(
-                "Tenggat YYYY-MM-DD (kosongkan jika tidak ada): "
-            ).strip() or None
+            due_date = (
+                input("Tenggat YYYY-MM-DD (kosongkan jika tidak ada): ").strip() or None
+            )
 
             try:
                 task = service.create_task(
@@ -116,11 +114,7 @@ def main() -> None:
             try:
                 task_id = int(input("ID tugas yang akan diperbarui: "))
                 existing_task = next(
-                    (
-                        task
-                        for task in service.list_tasks()
-                        if task.id == task_id
-                    ),
+                    (task for task in service.list_tasks() if task.id == task_id),
                     None,
                 )
 
@@ -128,12 +122,14 @@ def main() -> None:
                     print("Tugas tidak ditemukan.")
                     continue
 
-                title = input(
-                    f"Judul baru [{existing_task.title}]: "
-                ).strip() or existing_task.title
-                description = input(
-                    f"Deskripsi baru [{existing_task.description}]: "
-                ).strip() or existing_task.description
+                title = (
+                    input(f"Judul baru [{existing_task.title}]: ").strip()
+                    or existing_task.title
+                )
+                description = (
+                    input(f"Deskripsi baru [{existing_task.description}]: ").strip()
+                    or existing_task.description
+                )
                 priority = ask_priority(existing_task.priority)
                 due_date = ask_due_date(existing_task.due_date)
 
@@ -173,7 +169,6 @@ def main() -> None:
             except ValueError:
                 print("ID harus berupa angka.")
 
-
         elif choice == "6":
             query = input("Masukkan kata kunci: ")
             results = service.search_tasks(query)
@@ -193,9 +188,7 @@ def main() -> None:
             elif filter_choice == "2":
                 results = service.filter_tasks(completed=True)
             elif filter_choice == "3":
-                priority = input(
-                    "Prioritas (Low, Medium, High): "
-                ).strip()
+                priority = input("Prioritas (Low, Medium, High): ").strip()
                 try:
                     results = service.filter_tasks(priority=priority)
                 except ValueError as error:
@@ -242,24 +235,20 @@ def main() -> None:
             print(f"Medium            : {stats['priority_counts']['Medium']}")
             print(f"Low               : {stats['priority_counts']['Low']}")
 
-
         elif choice == "10":
-            file_path = input(
-                "Lokasi file CSV ekspor [data/tasks_export.csv]: "
-            ).strip() or "data/tasks_export.csv"
+            file_path = (
+                input("Lokasi file CSV ekspor [data/tasks_export.csv]: ").strip()
+                or "data/tasks_export.csv"
+            )
 
             try:
                 count = service.export_tasks_to_csv(file_path)
-                print(
-                    f"Berhasil mengekspor {count} tugas ke {file_path}."
-                )
+                print(f"Berhasil mengekspor {count} tugas ke {file_path}.")
             except (OSError, ValueError) as error:
                 print(f"Gagal mengekspor tugas: {error}")
 
         elif choice == "11":
-            file_path = input(
-                "Lokasi file CSV yang akan diimpor: "
-            ).strip()
+            file_path = input("Lokasi file CSV yang akan diimpor: ").strip()
 
             if not file_path:
                 print("Lokasi file tidak boleh kosong.")
@@ -272,9 +261,10 @@ def main() -> None:
                 print(f"Gagal mengimpor tugas: {error}")
 
         elif choice == "12":
-            backup_path = input(
-                "Lokasi file backup [data/tasks_backup.db]: "
-            ).strip() or "data/tasks_backup.db"
+            backup_path = (
+                input("Lokasi file backup [data/tasks_backup.db]: ").strip()
+                or "data/tasks_backup.db"
+            )
 
             try:
                 result = backup_database(backup_path)
@@ -283,9 +273,7 @@ def main() -> None:
                 print(f"Gagal membuat backup: {error}")
 
         elif choice == "13":
-            backup_path = input(
-                "Lokasi file backup yang akan dipulihkan: "
-            ).strip()
+            backup_path = input("Lokasi file backup yang akan dipulihkan: ").strip()
 
             if not backup_path:
                 print("Lokasi file backup tidak boleh kosong.")

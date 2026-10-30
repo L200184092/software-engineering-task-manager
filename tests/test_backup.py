@@ -1,4 +1,3 @@
-
 import sqlite3
 
 import pytest
@@ -111,6 +110,7 @@ def test_restore_database_rejects_database_without_tasks_table(tmp_path):
 
     assert get_titles(db_path) == ["Tugas tetap ada"]
 
+
 def test_backup_database_preserves_users_and_task_relationship(tmp_path):
     db_path = tmp_path / "source.db"
     backup_path = tmp_path / "backup.db"
@@ -221,6 +221,7 @@ def test_restore_database_preserves_users_and_task_relationship(tmp_path):
     assert task["title"] == "Task untuk restore"
     assert task["user_id"] == user_id
     assert old_task is None
+
 
 def test_restore_database_rejects_backup_without_users_table(tmp_path):
     db_path = tmp_path / "tasks.db"

@@ -15,14 +15,13 @@ password_hash = PasswordHash.recommended()
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+
 def get_secret_key() -> str:
     """Return the JWT secret key from the environment."""
     secret_key = os.getenv("TASK_MANAGER_SECRET_KEY")
 
     if not secret_key:
-        raise RuntimeError(
-            "TASK_MANAGER_SECRET_KEY environment variable is not set"
-        )
+        raise RuntimeError("TASK_MANAGER_SECRET_KEY environment variable is not set")
 
     return secret_key
 

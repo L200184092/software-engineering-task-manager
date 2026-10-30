@@ -8,6 +8,7 @@ from .repository import TaskRepository
 
 _UNSET = object()
 
+
 class TaskService:
     """Menangani logika bisnis dan validasi tugas."""
 
@@ -32,9 +33,7 @@ class TaskService:
             ) from exc
 
         if parsed_date.isoformat() != due_date:
-            raise ValueError(
-                "Tanggal tenggat harus menggunakan format YYYY-MM-DD."
-            )
+            raise ValueError("Tanggal tenggat harus menggunakan format YYYY-MM-DD.")
 
         return due_date
 
@@ -42,9 +41,7 @@ class TaskService:
     def _validate_priority(cls, priority: str) -> str:
         """Memastikan prioritas termasuk Low, Medium, atau High."""
         if priority not in cls.VALID_PRIORITIES:
-            raise ValueError(
-                "Prioritas harus Low, Medium, atau High."
-            )
+            raise ValueError("Prioritas harus Low, Medium, atau High.")
 
         return priority
 
@@ -87,8 +84,7 @@ class TaskService:
         return [
             task
             for task in self.list_tasks()
-            if query in task.title.casefold()
-            or query in task.description.casefold()
+            if query in task.title.casefold() or query in task.description.casefold()
         ]
 
     def filter_tasks(
@@ -100,17 +96,11 @@ class TaskService:
         tasks = self.list_tasks()
 
         if completed is not None:
-            tasks = [
-                task for task in tasks
-                if task.completed == completed
-            ]
+            tasks = [task for task in tasks if task.completed == completed]
 
         if priority is not None:
             priority = self._validate_priority(priority)
-            tasks = [
-                task for task in tasks
-                if task.priority == priority
-            ]
+            tasks = [task for task in tasks if task.priority == priority]
 
         return tasks
 
@@ -141,9 +131,7 @@ class TaskService:
                 ),
             )
 
-        raise ValueError(
-            "Pengurutan harus menggunakan 'priority' atau 'due_date'."
-        )
+        raise ValueError("Pengurutan harus menggunakan 'priority' atau 'due_date'.")
 
     def update_task(
         self,
@@ -161,11 +149,7 @@ class TaskService:
             raise ValueError("Judul tugas tidak boleh kosong.")
 
         task = next(
-            (
-                item
-                for item in self.repository.get_all()
-                if item.id == task_id
-            ),
+            (item for item in self.repository.get_all() if item.id == task_id),
             None,
         )
 
@@ -186,11 +170,7 @@ class TaskService:
     def complete_task(self, task_id: int) -> bool:
         """Menandai tugas sebagai selesai."""
         task = next(
-            (
-                item
-                for item in self.repository.get_all()
-                if item.id == task_id
-            ),
+            (item for item in self.repository.get_all() if item.id == task_id),
             None,
         )
 
@@ -218,11 +198,7 @@ class TaskService:
             "Low": sum(1 for task in tasks if task.priority == "Low"),
         }
 
-        completion_rate = (
-            round((completed / total) * 100, 2)
-            if total > 0
-            else 0.0
-        )
+        completion_rate = round((completed / total) * 100, 2) if total > 0 else 0.0
 
         return {
             "total": total,

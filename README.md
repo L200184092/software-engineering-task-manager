@@ -48,20 +48,23 @@ software-engineering-task-manager/
 │   └── task_manager/
 │       ├── __init__.py
 │       ├── api.py
-│       ├── cli.py
+│       ├── auth.py
 │       ├── backup.py
+│       ├── cli.py
 │       ├── csv_handler.py
 │       ├── database.py
 │       ├── models.py
 │       ├── repository.py
-│       └── services.py
+│       ├── services.py
+│       └── user_repository.py
 ├── tests/
 │   ├── __init__.py
 │   ├── test_api.py
+│   ├── test_backup.py
 │   ├── test_cli.py
 │   ├── test_csv_handler.py
 │   ├── test_services.py
-│   └── test_backup.py
+│   └── test_user_repository.py
 ├── data/
 ├── .gitignore
 ├── README.md
@@ -180,7 +183,7 @@ python -m pytest -v
 
 The test suite covers task creation, input validation, updates, task completion, deletion, search, filtering, sorting, task statistics, CSV import and export, and CLI interactions.
 
-The current test suite contains 61 tests.
+The current test suite contains 77 tests.
 
 ## Continuous Integration
 
@@ -247,17 +250,36 @@ Once the server is running, open:
 - Swagger UI: http://127.0.0.1:8000/docs
 - OpenAPI JSON: http://127.0.0.1:8000/openapi.json
 
-### Endpoint
+### Authentication Endpoints
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/` | Check API status |
-| GET | `/tasks` | Retrieve all tasks |
-| POST | `/tasks` | Create a task |
-| GET | `/tasks/{task_id}` | Retrieve a task by ID |
-| PUT | `/tasks/{task_id}` | Update a task |
-| PATCH | `/tasks/{task_id}/complete` | Mark a task as completed |
-| DELETE | `/tasks/{task_id}` | Delete a task |
+| Method | Endpoint | Description | Authentication |
+|---|---|---|---|
+| POST | `/auth/register` | Register a new user | Not required |
+| POST | `/auth/login` | Authenticate and obtain a JWT access token | Not required |
+
+### Task Endpoints
+
+| Method | Endpoint | Description | Authentication |
+|---|---|---|---|
+| GET | `/` | Check API status | Not required |
+| GET | `/tasks` | Retrieve the authenticated user's tasks | Required |
+| POST | `/tasks` | Create a task | Required |
+| GET | `/tasks/{task_id}` | Retrieve a task by ID | Required |
+| PUT | `/tasks/{task_id}` | Update a task | Required |
+| PATCH | `/tasks/{task_id}/complete` | Mark a task as completed | Required |
+| DELETE | `/tasks/{task_id}` | Delete a task | Required |
+
+### Authentication
+
+Task endpoints require a valid JWT access token.
+
+After logging in through `/auth/login`, copy the `access_token` from the response and use it in the HTTP authorization header:
+
+```http
+Authorization: Bearer YOUR_ACCESS_TOKEN
+```
+
+Never share access tokens publicly or commit them to version control.
 
 ### Running Tests
 

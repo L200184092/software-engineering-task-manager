@@ -62,14 +62,10 @@ def read_tasks(
         if reader.fieldnames is None:
             raise ValueError("File CSV kosong atau tidak memiliki header.")
 
-        if (
-            len(reader.fieldnames) != len(set(reader.fieldnames))
-            or set(reader.fieldnames) != set(CSV_FIELDS)
-        ):
-            raise ValueError(
-                "Header CSV harus berisi kolom: "
-                + ", ".join(CSV_FIELDS)
-            )
+        if len(reader.fieldnames) != len(set(reader.fieldnames)) or set(
+            reader.fieldnames
+        ) != set(CSV_FIELDS):
+            raise ValueError("Header CSV harus berisi kolom: " + ", ".join(CSV_FIELDS))
 
         tasks = []
 
@@ -93,7 +89,7 @@ def read_tasks(
                         f"Tanggal tenggat pada baris {row_number} "
                         "harus menggunakan format YYYY-MM-DD."
                     )
-            
+
             if not title:
                 raise ValueError(
                     f"Judul tugas pada baris {row_number} tidak boleh kosong."
@@ -105,9 +101,7 @@ def read_tasks(
                 )
 
             if priority not in {"Low", "Medium", "High"}:
-                raise ValueError(
-                    f"Prioritas pada baris {row_number} tidak valid."
-                )
+                raise ValueError(f"Prioritas pada baris {row_number} tidak valid.")
 
             tasks.append(
                 Task(

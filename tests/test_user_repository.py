@@ -1,4 +1,3 @@
-
 import sqlite3
 
 import pytest
@@ -22,18 +21,16 @@ def test_create_and_find_user(tmp_path):
     created = repository.create(user)
 
     assert created.id is not None
-    assert repository.get_by_username("ganno_test").email == (
-        "ganno_test@example.com"
-    )
-    assert repository.get_by_email("ganno_test@example.com").username == (
-        "ganno_test"
-    )
+    assert repository.get_by_username("ganno_test").email == ("ganno_test@example.com")
+    assert repository.get_by_email("ganno_test@example.com").username == ("ganno_test")
+
 
 def test_find_missing_user_returns_none(tmp_path):
     repository = UserRepository(tmp_path / "test_users.db")
 
     assert repository.get_by_username("tidak_ada") is None
     assert repository.get_by_email("missing@example.com") is None
+
 
 def test_duplicate_username_is_rejected(tmp_path):
     repository = UserRepository(tmp_path / "test_users.db")
@@ -54,6 +51,7 @@ def test_duplicate_username_is_rejected(tmp_path):
     with pytest.raises(sqlite3.IntegrityError):
         repository.create(second_user)
 
+
 def test_foreign_key_rejects_nonexistent_user(tmp_path):
     db_path = tmp_path / "test_foreign_keys.db"
 
@@ -61,9 +59,7 @@ def test_foreign_key_rejects_nonexistent_user(tmp_path):
     UserRepository(db_path)
 
     # Tugas tidak boleh merujuk ke pengguna yang tidak ada.
-    with get_connection(db_path) as connection, pytest.raises(
-        sqlite3.IntegrityError
-    ):
+    with get_connection(db_path) as connection, pytest.raises(sqlite3.IntegrityError):
         connection.execute(
             """
             INSERT INTO tasks (title, user_id)

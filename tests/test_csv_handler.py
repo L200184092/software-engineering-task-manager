@@ -37,6 +37,7 @@ def test_export_and_read_tasks_round_trip(tmp_path):
         assert imported.priority == original.priority
         assert imported.due_date == original.due_date
 
+
 def test_export_empty_tasks(tmp_path):
     csv_path = tmp_path / "empty.csv"
 
@@ -45,27 +46,28 @@ def test_export_empty_tasks(tmp_path):
     assert exported_count == 0
     assert read_tasks(csv_path) == []
 
+
 def test_read_tasks_rejects_empty_title(tmp_path):
     csv_path = tmp_path / "invalid.csv"
     csv_path.write_text(
-        "title,description,completed,priority,due_date\n"
-        ",Deskripsi,false,Medium,\n",
+        "title,description,completed,priority,due_date\n,Deskripsi,false,Medium,\n",
         encoding="utf-8",
     )
 
     with pytest.raises(ValueError, match="Judul tugas"):
         read_tasks(csv_path)
 
+
 def test_read_tasks_rejects_invalid_status(tmp_path):
     csv_path = tmp_path / "invalid_status.csv"
     csv_path.write_text(
-        "title,description,completed,priority,due_date\n"
-        "Tugas,Deskripsi,yes,Medium,\n",
+        "title,description,completed,priority,due_date\nTugas,Deskripsi,yes,Medium,\n",
         encoding="utf-8",
     )
 
     with pytest.raises(ValueError, match="Status"):
         read_tasks(csv_path)
+
 
 def test_read_tasks_rejects_invalid_priority(tmp_path):
     csv_path = tmp_path / "invalid_priority.csv"
@@ -78,16 +80,17 @@ def test_read_tasks_rejects_invalid_priority(tmp_path):
     with pytest.raises(ValueError, match="Prioritas"):
         read_tasks(csv_path)
 
+
 def test_read_tasks_rejects_invalid_header(tmp_path):
     csv_path = tmp_path / "invalid_header.csv"
     csv_path.write_text(
-        "title,description\n"
-        "Tugas,Deskripsi\n",
+        "title,description\nTugas,Deskripsi\n",
         encoding="utf-8",
     )
 
     with pytest.raises(ValueError, match="Header CSV"):
         read_tasks(csv_path)
+
 
 def test_read_tasks_rejects_invalid_due_date(tmp_path):
     csv_path = tmp_path / "invalid_date.csv"
