@@ -78,8 +78,19 @@ class TaskCreate(BaseModel):
 
 
 class TaskUpdate(BaseModel):
+    """Data lengkap yang diperlukan untuk mengganti tugas."""
+
     title: str = Field(min_length=1, max_length=200)
-    description: str = ""
+    description: str
+    priority: str
+    due_date: str | None
+
+
+class TaskPatch(BaseModel):
+    """Data untuk memperbarui sebagian field tugas."""
+
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
     priority: str | None = None
     due_date: str | None = None
 
@@ -248,6 +259,66 @@ def update_task(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not updated:
         raise HTTPException(status_code=404, detail="Task not found")
+    return service.repository.get_for_user(task_id, user.id)
+
+
+@app.patch("/tasks/{task_id}", response_model=TaskResponse)
+def patch_task(
+    task_id: int,
+    payload: TaskPatch,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    fields = payload.model_dump(exclude_unset=True)
+
+    if not fields:
+        raise HTTPException(
+            status_code=422,
+            detail="Setidaknya satu field harus dikirim.",
+        )
+
+    try:
+        if "title" in fields:
+            if fields["title"] is None:
+                raise ValueError("Judul tugas tidak boleh null.")
+
+            fields["title"] = fields["title"].strip()
+            if not fields["title"]:
+                raise ValueError("Judul tugas tidak boleh kosong.")
+
+        if "description" in fields:
+            if fields["description"] is None:
+                raise ValueError("Deskripsi tidak boleh null.")
+
+            fields["description"] = fields["description"].strip()
+
+        if "priority" in fields:
+            if fields["priority"] is None:
+                raise ValueError("Prioritas tidak boleh null.")
+
+            fields["priority"] = service._validate_priority(fields["priority"])
+
+        if "due_date" in fields:
+            fields["due_date"] = service._validate_due_date(fields["due_date"])
+
+        updated = service.repository.update_fields_for_user(
+            task_id,
+            user.id,
+            fields,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
+    if not updated:
+        raise HTTPException(
+            status_code=404,
+            detail="Task not found",
+        )
+
     return service.repository.get_for_user(task_id, user.id)
 
 

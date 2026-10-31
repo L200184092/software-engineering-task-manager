@@ -136,6 +136,29 @@ class TaskRepository:
             )
         return cursor.rowcount > 0
 
+    def update_fields_for_user(
+        self,
+        task_id: int,
+        user_id: int,
+        fields: dict,
+    ) -> bool:
+        """Memperbarui field tertentu dari tugas milik pengguna."""
+        allowed_fields = {"title", "description", "priority", "due_date"}
+        if not fields or not fields.keys() <= allowed_fields:
+            return False
+
+        assignments = ", ".join(f"{field} = ?" for field in fields)
+        values = list(fields.values()) + [task_id, user_id]
+
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                f"""UPDATE tasks SET {assignments}
+                    WHERE id = ? AND user_id = ?""",
+                values,
+            )
+
+        return cursor.rowcount > 0
+
     def complete_for_user(self, task_id: int, user_id: int) -> bool:
         with get_connection(self.db_path) as connection:
             cursor = connection.execute(

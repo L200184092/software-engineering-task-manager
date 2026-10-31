@@ -308,6 +308,121 @@ def test_user_cannot_access_another_users_task(client):
     assert client.get("/tasks", headers=headers_two).json() == []
 
 
+def test_patch_task_updates_only_provided_fields(client):
+    headers = register_and_login(client, "user_one", "one@example.com")
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={
+            "title": "Belajar FastAPI",
+            "description": "REST API",
+            "priority": "High",
+            "due_date": "2026-11-15",
+        },
+    )
+    assert created.status_code == 201, created.text
+    task = created.json()
+
+    response = client.patch(
+        f"/tasks/{task['id']}",
+        headers=headers,
+        json={"title": "Belajar PATCH"},
+    )
+
+    assert response.status_code == 200, response.text
+    updated = response.json()
+    assert updated["title"] == "Belajar PATCH"
+    assert updated["description"] == "REST API"
+    assert updated["priority"] == "High"
+    assert updated["due_date"] == "2026-11-15"
+
+
+def test_patch_task_can_clear_due_date(client):
+    headers = register_and_login(client, "user_one", "one@example.com")
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={
+            "title": "Tugas bertenggat",
+            "description": "Selesaikan tugas",
+            "priority": "Medium",
+            "due_date": "2026-11-15",
+        },
+    )
+    assert created.status_code == 201, created.text
+    task = created.json()
+
+    response = client.patch(
+        f"/tasks/{task['id']}",
+        headers=headers,
+        json={"due_date": None},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["due_date"] is None
+
+
+def test_patch_task_rejects_empty_payload(client):
+    headers = register_and_login(client, "user_one", "one@example.com")
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Tugas pengujian"},
+    )
+    assert created.status_code == 201, created.text
+
+    response = client.patch(
+        f"/tasks/{created.json()['id']}",
+        headers=headers,
+        json={},
+    )
+
+    assert response.status_code == 422
+
+
+def test_patch_task_rejects_invalid_priority(client):
+    headers = register_and_login(client, "user_one", "one@example.com")
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Tugas pengujian"},
+    )
+    assert created.status_code == 201, created.text
+
+    response = client.patch(
+        f"/tasks/{created.json()['id']}",
+        headers=headers,
+        json={"priority": "Urgent"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_user_cannot_patch_another_users_task(client):
+    headers_one = register_and_login(client, "user_one", "one@example.com")
+    headers_two = register_and_login(client, "user_two", "two@example.com")
+
+    created = client.post(
+        "/tasks",
+        headers=headers_one,
+        json={"title": "Tugas pribadi"},
+    )
+    assert created.status_code == 201, created.text
+    task_id = created.json()["id"]
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        headers=headers_two,
+        json={"title": "Mencoba mengambil alih"},
+    )
+
+    assert response.status_code == 404
+
+    original = client.get(f"/tasks/{task_id}", headers=headers_one)
+    assert original.status_code == 200
+    assert original.json()["title"] == "Tugas pribadi"
+
+
 def test_create_task_rejects_invalid_priority(client):
     headers = register_and_login(client, "user_one", "one@example.com")
     response = client.post(
