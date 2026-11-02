@@ -208,8 +208,8 @@ def create_task(
         description = payload.description.strip()
         if not title:
             raise ValueError("Judul tugas tidak boleh kosong.")
-        priority = service._validate_priority(payload.priority)
-        due_date = service._validate_due_date(payload.due_date)
+        priority = service.validate_priority(payload.priority)
+        due_date = service.validate_due_date(payload.due_date)
         return service.repository.create_for_user(
             Task(
                 title=title,
@@ -247,8 +247,8 @@ def update_task(
         description = payload.description.strip()
         if not title:
             raise ValueError("Judul tugas tidak boleh kosong.")
-        priority = service._validate_priority(payload.priority or "Medium")
-        due_date = service._validate_due_date(payload.due_date)
+        priority = service.validate_priority(payload.priority or "Medium")
+        due_date = service.validate_due_date(payload.due_date)
         updated = service.repository.update_for_user(
             task_id,
             user.id,
@@ -298,10 +298,10 @@ def patch_task(
             if fields["priority"] is None:
                 raise ValueError("Prioritas tidak boleh null.")
 
-            fields["priority"] = service._validate_priority(fields["priority"])
+            fields["priority"] = service.validate_priority(fields["priority"])
 
         if "due_date" in fields:
-            fields["due_date"] = service._validate_due_date(fields["due_date"])
+            fields["due_date"] = service.validate_due_date(fields["due_date"])
 
         updated = service.repository.update_fields_for_user(
             task_id,

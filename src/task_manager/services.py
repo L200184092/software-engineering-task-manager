@@ -18,7 +18,7 @@ class TaskService:
         self.repository = repository or TaskRepository()
 
     @staticmethod
-    def _validate_due_date(due_date: str | None) -> str | None:
+    def validate_due_date(due_date: str | None) -> str | None:
         """Memvalidasi tenggat waktu dengan format YYYY-MM-DD."""
         if due_date is None or not due_date.strip():
             return None
@@ -38,7 +38,7 @@ class TaskService:
         return due_date
 
     @classmethod
-    def _validate_priority(cls, priority: str) -> str:
+    def validate_priority(cls, priority: str) -> str:
         """Memastikan prioritas termasuk Low, Medium, atau High."""
         if priority not in cls.VALID_PRIORITIES:
             raise ValueError("Prioritas harus Low, Medium, atau High.")
@@ -55,8 +55,8 @@ class TaskService:
         """Membuat tugas baru setelah memvalidasi input."""
         title = title.strip()
         description = description.strip()
-        priority = self._validate_priority(priority)
-        due_date = self._validate_due_date(due_date)
+        priority = self.validate_priority(priority)
+        due_date = self.validate_due_date(due_date)
 
         if not title:
             raise ValueError("Judul tugas tidak boleh kosong.")
@@ -99,7 +99,7 @@ class TaskService:
             tasks = [task for task in tasks if task.completed == completed]
 
         if priority is not None:
-            priority = self._validate_priority(priority)
+            priority = self.validate_priority(priority)
             tasks = [task for task in tasks if task.priority == priority]
 
         return tasks
@@ -157,10 +157,10 @@ class TaskService:
             return False
 
         if priority is not None:
-            task.priority = self._validate_priority(priority)
+            task.priority = self.validate_priority(priority)
 
         if due_date is not _UNSET:
-            task.due_date = self._validate_due_date(due_date)
+            task.due_date = self.validate_due_date(due_date)
 
         task.title = title
         task.description = description
@@ -221,8 +221,8 @@ class TaskService:
         for task in tasks:
             task.title = task.title.strip()
             task.description = task.description.strip()
-            task.priority = self._validate_priority(task.priority)
-            task.due_date = self._validate_due_date(task.due_date)
+            task.priority = self.validate_priority(task.priority)
+            task.due_date = self.validate_due_date(task.due_date)
 
             if not task.title:
                 raise ValueError("Judul tugas tidak boleh kosong.")
