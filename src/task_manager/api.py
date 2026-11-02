@@ -1,7 +1,7 @@
 import sqlite3
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -191,10 +191,16 @@ def login(
 
 @app.get("/tasks", response_model=list[TaskResponse])
 def list_tasks(
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     user: User = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
 ):
-    return service.repository.get_all_for_user(user.id)
+    return service.repository.get_all_for_user(
+        user.id,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @app.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)

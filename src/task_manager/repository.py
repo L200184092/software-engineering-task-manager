@@ -100,13 +100,25 @@ class TaskRepository:
             ).fetchone()
         return self._task(row)
 
-    def get_all_for_user(self, user_id: int) -> list[Task]:
+    def get_all_for_user(
+        self,
+        user_id: int,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[Task]:
+        """Mengambil sebagian tugas milik pengguna dari database."""
         with get_connection(self.db_path) as connection:
             rows = connection.execute(
-                """SELECT id, title, description, completed, priority, due_date
-                   FROM tasks WHERE user_id=? ORDER BY id""",
-                (user_id,),
+                """
+                SELECT id, title, description, completed, priority, due_date
+                FROM tasks
+                WHERE user_id = ?
+                ORDER BY id
+                LIMIT ? OFFSET ?
+                """,
+                (user_id, limit, offset),
             ).fetchall()
+
         return [self._task(row) for row in rows]
 
     def get_for_user(self, task_id: int, user_id: int) -> Task | None:

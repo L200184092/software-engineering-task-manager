@@ -559,3 +559,72 @@ def test_patch_task_rejects_unknown_fields(client):
     original = client.get(f"/tasks/{task_id}", headers=headers)
     assert original.status_code == 200
     assert original.json()["title"] == "Tugas awal"
+
+
+def test_list_tasks_supports_pagination(client):
+    headers = register_and_login(client, "pagination_user", "pagination@example.com")
+
+    created_ids = []
+
+    for number in range(5):
+        response = client.post(
+            "/tasks",
+            headers=headers,
+            json={"title": f"Tugas {number + 1}"},
+        )
+        assert response.status_code == 201, response.text
+        created_ids.append(response.json()["id"])
+
+    first_page = client.get("/tasks?limit=2&offset=0", headers=headers)
+    second_page = client.get("/tasks?limit=2&offset=2", headers=headers)
+    third_page = client.get("/tasks?limit=2&offset=4", headers=headers)
+
+    assert first_page.status_code == 200
+    assert second_page.status_code == 200
+    assert third_page.status_code == 200
+
+    assert [task["id"] for task in first_page.json()] == created_ids[:2]
+    assert [task["id"] for task in second_page.json()] == created_ids[2:4]
+    assert [task["id"] for task in third_page.json()] == created_ids[4:]
+
+
+def test_list_tasks_rejects_invalid_pagination_parameters(client):
+    headers = register_and_login(client, "pagination_user", "pagination@example.com")
+
+    invalid_params = [
+        "limit=0",
+        "limit=101",
+        "offset=-1",
+    ]
+
+    for params in invalid_params:
+        response = client.get(f"/tasks?{params}", headers=headers)
+        assert response.status_code == 422, (
+            f"Parameter {params!r} seharusnya ditolak: {response.text}"
+        )
+
+
+def test_list_tasks_pagination_preserves_user_isolation(client):
+    user_one = register_and_login(client, "page_user_one", "page1@example.com")
+    user_two = register_and_login(client, "page_user_two", "page2@example.com")
+
+    for number in range(3):
+        response = client.post(
+            "/tasks",
+            headers=user_one,
+            json={"title": f"Tugas pengguna pertama {number + 1}"},
+        )
+        assert response.status_code == 201, response.text
+
+    response = client.post(
+        "/tasks",
+        headers=user_two,
+        json={"title": "Tugas pengguna kedua"},
+    )
+    assert response.status_code == 201, response.text
+
+    result = client.get("/tasks?limit=10&offset=0", headers=user_two)
+
+    assert result.status_code == 200
+    assert len(result.json()) == 1
+    assert result.json()[0]["title"] == "Tugas pengguna kedua"
