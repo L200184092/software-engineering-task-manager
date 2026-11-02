@@ -441,3 +441,121 @@ def test_create_task_rejects_invalid_due_date(client):
         json={"title": "Invalid date", "due_date": "25-10-2026"},
     )
     assert response.status_code == 422
+
+
+def test_patch_task_rejects_whitespace_only_title(client):
+    headers = register_and_login(client, "user_one", "one@example.com")
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Tugas awal"},
+    )
+    assert created.status_code == 201, created.text
+
+    task_id = created.json()["id"]
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        headers=headers,
+        json={"title": "   "},
+    )
+
+    assert response.status_code == 422
+
+    original = client.get(f"/tasks/{task_id}", headers=headers)
+    assert original.status_code == 200
+    assert original.json()["title"] == "Tugas awal"
+
+
+def test_patch_task_rejects_null_non_nullable_fields(client):
+    headers = register_and_login(client, "user_one", "one@example.com")
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={
+            "title": "Tugas awal",
+            "description": "Deskripsi awal",
+            "priority": "Medium",
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    task_id = created.json()["id"]
+
+    for field in ("title", "description", "priority"):
+        response = client.patch(
+            f"/tasks/{task_id}",
+            headers=headers,
+            json={field: None},
+        )
+
+        assert response.status_code == 422, (
+            f"Field {field!r} seharusnya menolak null: {response.text}"
+        )
+
+
+def test_patch_task_rejects_invalid_due_date(client):
+    headers = register_and_login(client, "user_one", "one@example.com")
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={
+            "title": "Tugas awal",
+            "due_date": "2026-11-15",
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    task_id = created.json()["id"]
+
+    for invalid_date in ("15-11-2026", "2026-02-30", "2026/11/15"):
+        response = client.patch(
+            f"/tasks/{task_id}",
+            headers=headers,
+            json={"due_date": invalid_date},
+        )
+
+        assert response.status_code == 422, (
+            f"Tanggal {invalid_date!r} seharusnya ditolak: {response.text}"
+        )
+
+    original = client.get(f"/tasks/{task_id}", headers=headers)
+    assert original.status_code == 200
+    assert original.json()["due_date"] == "2026-11-15"
+
+
+def test_patch_task_returns_404_for_nonexistent_task(client):
+    headers = register_and_login(client, "user_one", "one@example.com")
+
+    response = client.patch(
+        "/tasks/999999",
+        headers=headers,
+        json={"title": "Tugas baru"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Task not found"
+
+
+def test_patch_task_rejects_unknown_fields(client):
+    headers = register_and_login(client, "user_one", "one@example.com")
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Tugas awal"},
+    )
+    assert created.status_code == 201, created.text
+
+    task_id = created.json()["id"]
+
+    response = client.patch(
+        f"/tasks/{task_id}",
+        headers=headers,
+        json={"titlle": "Judul salah eja"},
+    )
+
+    assert response.status_code == 422
+
+    original = client.get(f"/tasks/{task_id}", headers=headers)
+    assert original.status_code == 200
+    assert original.json()["title"] == "Tugas awal"

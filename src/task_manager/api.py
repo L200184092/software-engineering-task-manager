@@ -89,6 +89,8 @@ class TaskUpdate(BaseModel):
 class TaskPatch(BaseModel):
     """Data untuk memperbarui sebagian field tugas."""
 
+    model_config = ConfigDict(extra="forbid")
+
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
     priority: str | None = None
