@@ -108,8 +108,25 @@ class TaskRepository:
         search: str | None = None,
         completed: bool | None = None,
         priority: str | None = None,
+        sort_by: str = "id",
+        sort_order: str = "asc",
     ) -> list[Task]:
-        """Mengambil tugas milik pengguna dengan pencarian, filter, dan pagination."""
+        """Mengambil tugas milik pengguna dengan pencarian, filter,
+        pagination, dan sorting.
+        """
+        sort_columns = {
+            "id": "id",
+            "created_at": "created_at",
+            "title": "title",
+            "priority": "priority",
+        }
+
+        if sort_by not in sort_columns:
+            raise ValueError("Kolom pengurutan tidak valid.")
+
+        if sort_order not in {"asc", "desc"}:
+            raise ValueError("Arah pengurutan harus 'asc' atau 'desc'.")
+
         query = """
             SELECT id, title, description, completed, priority, due_date
             FROM tasks
@@ -129,7 +146,20 @@ class TaskRepository:
             query += " AND priority = ?"
             params.append(priority)
 
-        query += " ORDER BY id LIMIT ? OFFSET ?"
+        if sort_by == "priority":
+            query += """
+                ORDER BY
+                    CASE priority
+                        WHEN 'High' THEN 3
+                        WHEN 'Medium' THEN 2
+                        WHEN 'Low' THEN 1
+                        ELSE 0
+                    END
+            """
+        else:
+            query += f" ORDER BY {sort_columns[sort_by]}"
+
+        query += f" {sort_order.upper()}, id ASC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
         with get_connection(self.db_path) as connection:

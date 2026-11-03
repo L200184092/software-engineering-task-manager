@@ -25,6 +25,7 @@ def client(tmp_path):
 
     try:
         with TestClient(app) as test_client:
+            test_client.db_path = db_path
             yield test_client
     finally:
         app.dependency_overrides.clear()
@@ -756,3 +757,156 @@ def test_list_tasks_filters_preserve_user_isolation(client):
     assert response.status_code == 200
     assert len(response.json()) == 1
     assert response.json()[0]["title"] == "Belajar Python pengguna lain"
+
+
+def test_list_tasks_sorts_by_title_ascending(client):
+    headers = register_and_login(client, "sort_title_user", "sorttitle@example.com")
+
+    for title in ["Zebra", "Apel", "Mangga"]:
+        client.post("/tasks", headers=headers, json={"title": title})
+
+    response = client.get("/tasks?sort_by=title&sort_order=asc", headers=headers)
+
+    assert response.status_code == 200
+    assert [task["title"] for task in response.json()] == [
+        "Apel",
+        "Mangga",
+        "Zebra",
+    ]
+
+
+def test_list_tasks_sorts_by_title_descending(client):
+    headers = register_and_login(client, "sort_desc_user", "sortdesc@example.com")
+
+    for title in ["Zebra", "Apel", "Mangga"]:
+        client.post("/tasks", headers=headers, json={"title": title})
+
+    response = client.get("/tasks?sort_by=title&sort_order=desc", headers=headers)
+
+    assert response.status_code == 200
+    assert [task["title"] for task in response.json()] == [
+        "Zebra",
+        "Mangga",
+        "Apel",
+    ]
+
+
+def test_list_tasks_sorts_by_priority(client):
+    headers = register_and_login(
+        client, "sort_priority_user", "sortpriority@example.com"
+    )
+
+    for title, priority in [
+        ("Tugas rendah", "Low"),
+        ("Tugas tinggi", "High"),
+        ("Tugas sedang", "Medium"),
+    ]:
+        client.post(
+            "/tasks",
+            headers=headers,
+            json={"title": title, "priority": priority},
+        )
+
+    response = client.get("/tasks?sort_by=priority&sort_order=desc", headers=headers)
+
+    assert response.status_code == 200
+    assert [task["priority"] for task in response.json()] == [
+        "High",
+        "Medium",
+        "Low",
+    ]
+
+
+def test_list_tasks_sorts_by_id_descending(client):
+    headers = register_and_login(client, "sort_id_user", "sortid@example.com")
+
+    created_ids = []
+
+    for number in range(3):
+        response = client.post(
+            "/tasks",
+            headers=headers,
+            json={"title": f"Tugas {number + 1}"},
+        )
+        created_ids.append(response.json()["id"])
+
+    response = client.get("/tasks?sort_by=id&sort_order=desc", headers=headers)
+
+    assert response.status_code == 200
+    assert [task["id"] for task in response.json()] == list(reversed(created_ids))
+
+
+def test_list_tasks_sorts_by_created_at(client):
+    import sqlite3
+
+    headers = register_and_login(client, "sort_date_user", "sortdate@example.com")
+
+    task_ids = []
+
+    for title in ["Tugas pertama", "Tugas kedua", "Tugas ketiga"]:
+        response = client.post(
+            "/tasks",
+            headers=headers,
+            json={"title": title},
+        )
+        assert response.status_code == 201
+        task_ids.append(response.json()["id"])
+
+    # Atur timestamp secara eksplisit agar hasil sorting deterministik.
+    with sqlite3.connect(client.db_path) as connection:
+        for task_id, timestamp in zip(
+            task_ids,
+            [
+                "2026-01-01 00:00:01",
+                "2026-01-01 00:00:02",
+                "2026-01-01 00:00:03",
+            ],
+        ):
+            connection.execute(
+                "UPDATE tasks SET created_at = ? WHERE id = ?",
+                (timestamp, task_id),
+            )
+
+    response = client.get(
+        "/tasks?sort_by=created_at&sort_order=desc",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert [task["title"] for task in response.json()] == [
+        "Tugas ketiga",
+        "Tugas kedua",
+        "Tugas pertama",
+    ]
+
+
+def test_list_tasks_combines_sorting_and_pagination(client):
+    headers = register_and_login(client, "sort_page_user", "sortpage@example.com")
+
+    for title in ["Zebra", "Apel", "Mangga", "Durian"]:
+        client.post("/tasks", headers=headers, json={"title": title})
+
+    response = client.get(
+        "/tasks?sort_by=title&sort_order=asc&limit=2&offset=1",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert [task["title"] for task in response.json()] == ["Durian", "Mangga"]
+
+
+def test_list_tasks_rejects_invalid_sorting_parameters(client):
+    headers = register_and_login(client, "sort_invalid_user", "sortinvalid@example.com")
+
+    invalid_params = [
+        "sort_by=unknown",
+        "sort_by=password",
+        "sort_order=random",
+    ]
+
+    for params in invalid_params:
+        response = client.get(f"/tasks?{params}", headers=headers)
+
+        assert response.status_code == 422, (
+            f"Parameter {params!r} seharusnya ditolak: {response.text}"
+        )

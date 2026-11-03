@@ -196,6 +196,8 @@ def list_tasks(
     search: str | None = Query(default=None, max_length=200),
     completed: bool | None = Query(default=None),
     priority: str | None = Query(default=None, max_length=20),
+    sort_by: str = Query(default="id"),
+    sort_order: str = Query(default="asc"),
     user: User = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
 ):
@@ -211,6 +213,22 @@ def list_tasks(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    allowed_sort_fields = {"id", "created_at", "title", "priority"}
+
+    if sort_by not in allowed_sort_fields:
+        raise HTTPException(
+            status_code=422,
+            detail="Kolom pengurutan tidak valid.",
+        )
+
+    sort_order = sort_order.lower()
+
+    if sort_order not in {"asc", "desc"}:
+        raise HTTPException(
+            status_code=422,
+            detail="Arah pengurutan harus 'asc' atau 'desc'.",
+        )
+
     return service.repository.get_all_for_user(
         user.id,
         limit=limit,
@@ -218,6 +236,8 @@ def list_tasks(
         search=search,
         completed=completed,
         priority=priority,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
 
 
