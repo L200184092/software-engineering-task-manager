@@ -193,13 +193,31 @@ def login(
 def list_tasks(
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, max_length=200),
+    completed: bool | None = Query(default=None),
+    priority: str | None = Query(default=None, max_length=20),
     user: User = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
 ):
+    if search is not None and not search.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Parameter search tidak boleh hanya berisi spasi.",
+        )
+
+    if priority is not None:
+        try:
+            priority = service.validate_priority(priority)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     return service.repository.get_all_for_user(
         user.id,
         limit=limit,
         offset=offset,
+        search=search,
+        completed=completed,
+        priority=priority,
     )
 
 

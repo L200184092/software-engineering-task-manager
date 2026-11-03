@@ -628,3 +628,131 @@ def test_list_tasks_pagination_preserves_user_isolation(client):
     assert result.status_code == 200
     assert len(result.json()) == 1
     assert result.json()[0]["title"] == "Tugas pengguna kedua"
+
+
+def test_list_tasks_searches_by_title(client):
+    headers = register_and_login(client, "search_user", "search@example.com")
+
+    client.post("/tasks", headers=headers, json={"title": "Belajar FastAPI"})
+    client.post("/tasks", headers=headers, json={"title": "Membaca Python"})
+
+    response = client.get("/tasks?search=FastAPI", headers=headers)
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["title"] == "Belajar FastAPI"
+
+
+def test_list_tasks_filters_by_completion_status(client):
+    headers = register_and_login(client, "status_user", "status@example.com")
+
+    first = client.post(
+        "/tasks", headers=headers, json={"title": "Tugas belum selesai"}
+    )
+    second = client.post("/tasks", headers=headers, json={"title": "Tugas selesai"})
+
+    task_id = second.json()["id"]
+    completed = client.patch(f"/tasks/{task_id}/complete", headers=headers)
+    assert completed.status_code == 200
+
+    pending_response = client.get("/tasks?completed=false", headers=headers)
+    completed_response = client.get("/tasks?completed=true", headers=headers)
+
+    assert [task["id"] for task in pending_response.json()] == [first.json()["id"]]
+    assert [task["id"] for task in completed_response.json()] == [second.json()["id"]]
+
+
+def test_list_tasks_filters_by_priority(client):
+    headers = register_and_login(client, "priority_user", "priority@example.com")
+
+    client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Tugas penting", "priority": "High"},
+    )
+    client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Tugas biasa", "priority": "Medium"},
+    )
+
+    response = client.get("/tasks?priority=High", headers=headers)
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["title"] == "Tugas penting"
+    assert response.json()[0]["priority"] == "High"
+
+
+def test_list_tasks_combines_filters_and_pagination(client):
+    headers = register_and_login(client, "combined_user", "combined@example.com")
+
+    created_ids = []
+
+    for number in range(3):
+        response = client.post(
+            "/tasks",
+            headers=headers,
+            json={
+                "title": f"Belajar Python {number + 1}",
+                "priority": "High",
+            },
+        )
+        assert response.status_code == 201
+        created_ids.append(response.json()["id"])
+
+    client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Belajar Java", "priority": "Medium"},
+    )
+
+    response = client.get(
+        "/tasks?search=Python&completed=false&priority=High&limit=1&offset=1",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["id"] == created_ids[1]
+
+
+def test_list_tasks_rejects_invalid_search_and_priority(client):
+    headers = register_and_login(client, "validation_user", "validation@example.com")
+
+    invalid_params = [
+        "search=%20%20%20",
+        "priority=Urgent",
+    ]
+
+    for params in invalid_params:
+        response = client.get(f"/tasks?{params}", headers=headers)
+        assert response.status_code == 422, (
+            f"Parameter {params!r} seharusnya ditolak: {response.text}"
+        )
+
+
+def test_list_tasks_filters_preserve_user_isolation(client):
+    user_one = register_and_login(client, "filter_user_one", "filter1@example.com")
+    user_two = register_and_login(client, "filter_user_two", "filter2@example.com")
+
+    client.post(
+        "/tasks",
+        headers=user_one,
+        json={"title": "Belajar Python pribadi", "priority": "High"},
+    )
+
+    client.post(
+        "/tasks",
+        headers=user_two,
+        json={"title": "Belajar Python pengguna lain", "priority": "High"},
+    )
+
+    response = client.get(
+        "/tasks?search=Python&priority=High",
+        headers=user_two,
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["title"] == "Belajar Python pengguna lain"

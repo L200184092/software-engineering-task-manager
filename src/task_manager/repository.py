@@ -105,19 +105,35 @@ class TaskRepository:
         user_id: int,
         limit: int = 10,
         offset: int = 0,
+        search: str | None = None,
+        completed: bool | None = None,
+        priority: str | None = None,
     ) -> list[Task]:
-        """Mengambil sebagian tugas milik pengguna dari database."""
+        """Mengambil tugas milik pengguna dengan pencarian, filter, dan pagination."""
+        query = """
+            SELECT id, title, description, completed, priority, due_date
+            FROM tasks
+            WHERE user_id = ?
+        """
+        params: list = [user_id]
+
+        if search is not None:
+            query += " AND title LIKE ?"
+            params.append(f"%{search.strip()}%")
+
+        if completed is not None:
+            query += " AND completed = ?"
+            params.append(int(completed))
+
+        if priority is not None:
+            query += " AND priority = ?"
+            params.append(priority)
+
+        query += " ORDER BY id LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
         with get_connection(self.db_path) as connection:
-            rows = connection.execute(
-                """
-                SELECT id, title, description, completed, priority, due_date
-                FROM tasks
-                WHERE user_id = ?
-                ORDER BY id
-                LIMIT ? OFFSET ?
-                """,
-                (user_id, limit, offset),
-            ).fetchall()
+            rows = connection.execute(query, params).fetchall()
 
         return [self._task(row) for row in rows]
 
