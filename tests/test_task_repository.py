@@ -1,4 +1,3 @@
-
 from task_manager.auth import hash_password
 from task_manager.models import Task, User
 from task_manager.repository import TaskRepository
