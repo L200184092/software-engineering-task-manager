@@ -910,3 +910,123 @@ def test_list_tasks_rejects_invalid_sorting_parameters(client):
         assert response.status_code == 422, (
             f"Parameter {params!r} seharusnya ditolak: {response.text}"
         )
+
+
+def test_list_tasks_filters_by_due_date_range(client):
+    headers = register_and_login(client, "deadline_api_user", "deadlineapi@example.com")
+
+    tasks = [
+        ("Sebelum rentang", "2026-11-03"),
+        ("Dalam rentang", "2026-11-06"),
+        ("Setelah rentang", "2026-11-12"),
+        ("Tanpa deadline", None),
+    ]
+
+    for title, due_date in tasks:
+        response = client.post(
+            "/tasks",
+            headers=headers,
+            json={"title": title, "due_date": due_date},
+        )
+        assert response.status_code == 201, response.text
+
+    response = client.get(
+        "/tasks?due_from=2026-11-04&due_to=2026-11-10",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert [task["title"] for task in response.json()] == ["Dalam rentang"]
+
+
+def test_list_tasks_rejects_invalid_due_date(client):
+    headers = register_and_login(
+        client, "invalid_deadline_user", "invaliddeadline@example.com"
+    )
+
+    for params in [
+        "due_from=04-11-2026",
+        "due_to=2026-02-30",
+        "due_from=2026/11/04",
+    ]:
+        response = client.get(f"/tasks?{params}", headers=headers)
+        assert response.status_code == 422
+
+
+def test_list_tasks_rejects_reversed_due_date_range(client):
+    headers = register_and_login(
+        client, "reversed_deadline_user", "reverseddeadline@example.com"
+    )
+
+    response = client.get(
+        "/tasks?due_from=2026-11-10&due_to=2026-11-04",
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_list_tasks_sorts_by_due_date_ascending(client):
+    headers = register_and_login(client, "sort_due_asc_user", "sortdueasc@example.com")
+    client.post(
+        "/tasks",
+        json={"title": "Tanpa deadline"},
+        headers=headers,
+    )
+    client.post(
+        "/tasks",
+        json={"title": "Deadline jauh", "due_date": "2026-11-10"},
+        headers=headers,
+    )
+    client.post(
+        "/tasks",
+        json={"title": "Deadline dekat", "due_date": "2026-11-05"},
+        headers=headers,
+    )
+
+    response = client.get(
+        "/tasks?sort_by=due_date&sort_order=asc",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    titles = [task["title"] for task in response.json()]
+    assert titles == [
+        "Deadline dekat",
+        "Deadline jauh",
+        "Tanpa deadline",
+    ]
+
+
+def test_list_tasks_sorts_by_due_date_descending(client):
+    headers = register_and_login(
+        client, "sort_due_desc_user", "sortduedesc@example.com"
+    )
+    client.post(
+        "/tasks",
+        json={"title": "Tanpa deadline"},
+        headers=headers,
+    )
+    client.post(
+        "/tasks",
+        json={"title": "Deadline dekat", "due_date": "2026-11-05"},
+        headers=headers,
+    )
+    client.post(
+        "/tasks",
+        json={"title": "Deadline jauh", "due_date": "2026-11-10"},
+        headers=headers,
+    )
+
+    response = client.get(
+        "/tasks?sort_by=due_date&sort_order=desc",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    titles = [task["title"] for task in response.json()]
+    assert titles == [
+        "Deadline jauh",
+        "Deadline dekat",
+        "Tanpa deadline",
+    ]

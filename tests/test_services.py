@@ -1,3 +1,6 @@
+
+from datetime import date
+
 import pytest
 
 from src.task_manager.database import init_db
@@ -421,3 +424,91 @@ def test_import_invalid_csv_does_not_save_tasks(tmp_path):
         service.import_tasks_from_csv(csv_path)
 
     assert service.list_tasks() == []
+
+
+def test_deadline_status_overdue(tmp_path):
+    service = create_test_service(tmp_path)
+    task = service.create_task(
+        "Tugas terlambat",
+        due_date="2026-11-03",
+    )
+
+    status = service.get_deadline_status(
+        task,
+        today=date(2026, 11, 4),
+    )
+
+    assert status == "Overdue"
+
+
+def test_deadline_status_due_today(tmp_path):
+    service = create_test_service(tmp_path)
+    task = service.create_task(
+        "Tugas hari ini",
+        due_date="2026-11-04",
+    )
+
+    status = service.get_deadline_status(
+        task,
+        today=date(2026, 11, 4),
+    )
+
+    assert status == "Due Today"
+
+
+def test_deadline_status_upcoming(tmp_path):
+    service = create_test_service(tmp_path)
+    task = service.create_task(
+        "Tugas mendatang",
+        due_date="2026-11-11",
+    )
+
+    status = service.get_deadline_status(
+        task,
+        today=date(2026, 11, 4),
+    )
+
+    assert status == "Upcoming"
+
+
+def test_deadline_status_future(tmp_path):
+    service = create_test_service(tmp_path)
+    task = service.create_task(
+        "Tugas masa depan",
+        due_date="2026-11-12",
+    )
+
+    status = service.get_deadline_status(
+        task,
+        today=date(2026, 11, 4),
+    )
+
+    assert status == "Future"
+
+
+def test_deadline_status_no_deadline(tmp_path):
+    service = create_test_service(tmp_path)
+    task = service.create_task("Tugas tanpa deadline")
+
+    status = service.get_deadline_status(
+        task,
+        today=date(2026, 11, 4),
+    )
+
+    assert status == "No Deadline"
+
+
+def test_deadline_status_completed_takes_precedence(tmp_path):
+    service = create_test_service(tmp_path)
+    task = service.create_task(
+        "Tugas sudah selesai",
+        due_date="2026-11-01",
+    )
+    task.completed = True
+
+    status = service.get_deadline_status(
+        task,
+        today=date(2026, 11, 4),
+    )
+
+    assert status == "Completed"

@@ -37,6 +37,33 @@ class TaskService:
 
         return due_date
 
+    @staticmethod
+    def get_deadline_status(
+        task: Task,
+        today: date | None = None,
+    ) -> str:
+        """Menentukan status deadline sebuah tugas."""
+        if task.completed:
+            return "Completed"
+
+        if task.due_date is None:
+            return "No Deadline"
+
+        today = today or date.today()
+        due_date = date.fromisoformat(task.due_date)
+        days_remaining = (due_date - today).days
+
+        if days_remaining < 0:
+            return "Overdue"
+
+        if days_remaining == 0:
+            return "Due Today"
+
+        if days_remaining <= 7:
+            return "Upcoming"
+
+        return "Future"
+
     @classmethod
     def validate_priority(cls, priority: str) -> str:
         """Memastikan prioritas termasuk Low, Medium, atau High."""

@@ -198,6 +198,8 @@ def list_tasks(
     priority: str | None = Query(default=None, max_length=20),
     sort_by: str = Query(default="id"),
     sort_order: str = Query(default="asc"),
+    due_from: str | None = Query(default=None),
+    due_to: str | None = Query(default=None),
     user: User = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
 ):
@@ -207,13 +209,30 @@ def list_tasks(
             detail="Parameter search tidak boleh hanya berisi spasi.",
         )
 
+    try:
+        due_from = service.validate_due_date(due_from)
+        due_to = service.validate_due_date(due_to)
+
+        if due_from and due_to and due_from > due_to:
+            raise ValueError(
+                "Tanggal awal deadline tidak boleh melebihi tanggal akhir."
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     if priority is not None:
         try:
             priority = service.validate_priority(priority)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    allowed_sort_fields = {"id", "created_at", "title", "priority"}
+    allowed_sort_fields = {
+        "id",
+        "created_at",
+        "title",
+        "priority",
+        "due_date",
+    }
 
     if sort_by not in allowed_sort_fields:
         raise HTTPException(
@@ -238,6 +257,8 @@ def list_tasks(
         priority=priority,
         sort_by=sort_by,
         sort_order=sort_order,
+        due_from=due_from,
+        due_to=due_to,
     )
 
 

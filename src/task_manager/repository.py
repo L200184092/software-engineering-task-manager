@@ -110,6 +110,8 @@ class TaskRepository:
         priority: str | None = None,
         sort_by: str = "id",
         sort_order: str = "asc",
+        due_from: str | None = None,
+        due_to: str | None = None,
     ) -> list[Task]:
         """Mengambil tugas milik pengguna dengan pencarian, filter,
         pagination, dan sorting.
@@ -119,6 +121,7 @@ class TaskRepository:
             "created_at": "created_at",
             "title": "title",
             "priority": "priority",
+            "due_date": "due_date",
         }
 
         if sort_by not in sort_columns:
@@ -146,6 +149,14 @@ class TaskRepository:
             query += " AND priority = ?"
             params.append(priority)
 
+        if due_from is not None:
+            query += " AND due_date >= ?"
+            params.append(due_from)
+
+        if due_to is not None:
+            query += " AND due_date <= ?"
+            params.append(due_to)
+
         if sort_by == "priority":
             query += """
                 ORDER BY
@@ -155,6 +166,12 @@ class TaskRepository:
                         WHEN 'Low' THEN 1
                         ELSE 0
                     END
+            """
+        elif sort_by == "due_date":
+            query += """
+                ORDER BY
+                    CASE WHEN due_date IS NULL THEN 1 ELSE 0 END ASC,
+                    due_date
             """
         else:
             query += f" ORDER BY {sort_columns[sort_by]}"
