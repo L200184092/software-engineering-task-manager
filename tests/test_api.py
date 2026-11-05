@@ -1030,3 +1030,74 @@ def test_list_tasks_sorts_by_due_date_descending(client):
         "Deadline dekat",
         "Tanpa deadline",
     ]
+
+
+def test_api_returns_correct_deadline_status(client):
+    headers = register_and_login(
+        client,
+        "deadline_status_user",
+        "deadlinestatus@example.com",
+    )
+
+    today = datetime.now().date()
+    upcoming_date = (today + timedelta(days=3)).isoformat()
+    future_date = (today + timedelta(days=10)).isoformat()
+
+    # POST: Membuat tugas dengan deadline mendatang.
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={
+            "title": "Menyelesaikan proyek",
+            "due_date": upcoming_date,
+        },
+    )
+
+    assert created.status_code == 201
+    task = created.json()
+    task_id = task["id"]
+    assert task["deadline_status"] == "Upcoming"
+
+    # GET list: Memastikan status tersedia pada daftar tugas.
+    listed = client.get("/tasks", headers=headers)
+    assert listed.status_code == 200
+    assert listed.json()[0]["deadline_status"] == "Upcoming"
+
+    # GET detail: Memastikan status tersedia pada detail tugas.
+    detail = client.get(f"/tasks/{task_id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["deadline_status"] == "Upcoming"
+
+    # PUT: Mengubah deadline menjadi lebih dari 7 hari.
+    updated = client.put(
+        f"/tasks/{task_id}",
+        headers=headers,
+        json={
+            "title": "Menyelesaikan proyek",
+            "description": "",
+            "priority": "Medium",
+            "due_date": future_date,
+        },
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["deadline_status"] == "Future"
+
+    # PATCH: Menghapus deadline.
+    patched = client.patch(
+        f"/tasks/{task_id}",
+        headers=headers,
+        json={"due_date": None},
+    )
+
+    assert patched.status_code == 200
+    assert patched.json()["deadline_status"] == "No Deadline"
+
+    # PATCH complete: Status Completed harus menjadi prioritas.
+    completed = client.patch(
+        f"/tasks/{task_id}/complete",
+        headers=headers,
+    )
+
+    assert completed.status_code == 200
+    assert completed.json()["deadline_status"] == "Completed"

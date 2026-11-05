@@ -105,6 +105,19 @@ class TaskResponse(BaseModel):
     completed: bool
     priority: str
     due_date: str | None
+    deadline_status: str
+
+
+def to_task_response(task: Task, service: TaskService) -> TaskResponse:
+    return TaskResponse(
+        id=task.id,
+        title=task.title,
+        description=task.description,
+        completed=task.completed,
+        priority=task.priority,
+        due_date=task.due_date,
+        deadline_status=service.get_deadline_status(task),
+    )
 
 
 def get_current_user(
@@ -248,7 +261,7 @@ def list_tasks(
             detail="Arah pengurutan harus 'asc' atau 'desc'.",
         )
 
-    return service.repository.get_all_for_user(
+    tasks = service.repository.get_all_for_user(
         user.id,
         limit=limit,
         offset=offset,
@@ -260,6 +273,8 @@ def list_tasks(
         due_from=due_from,
         due_to=due_to,
     )
+
+    return [to_task_response(task, service) for task in tasks]
 
 
 @app.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
@@ -275,7 +290,7 @@ def create_task(
             raise ValueError("Judul tugas tidak boleh kosong.")
         priority = service.validate_priority(payload.priority)
         due_date = service.validate_due_date(payload.due_date)
-        return service.repository.create_for_user(
+        task = service.repository.create_for_user(
             Task(
                 title=title,
                 description=description,
@@ -284,6 +299,9 @@ def create_task(
             ),
             user.id,
         )
+
+        return to_task_response(task, service)
+
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -297,7 +315,7 @@ def get_task(
     task = service.repository.get_for_user(task_id, user.id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    return to_task_response(task, service)
 
 
 @app.put("/tasks/{task_id}", response_model=TaskResponse)
@@ -326,7 +344,8 @@ def update_task(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not updated:
         raise HTTPException(status_code=404, detail="Task not found")
-    return service.repository.get_for_user(task_id, user.id)
+    task = service.repository.get_for_user(task_id, user.id)
+    return to_task_response(task, service)
 
 
 @app.patch("/tasks/{task_id}", response_model=TaskResponse)
@@ -386,7 +405,8 @@ def patch_task(
             detail="Task not found",
         )
 
-    return service.repository.get_for_user(task_id, user.id)
+    task = service.repository.get_for_user(task_id, user.id)
+    return to_task_response(task, service)
 
 
 @app.patch("/tasks/{task_id}/complete", response_model=TaskResponse)
@@ -397,7 +417,8 @@ def complete_task(
 ):
     if not service.repository.complete_for_user(task_id, user.id):
         raise HTTPException(status_code=404, detail="Task not found")
-    return service.repository.get_for_user(task_id, user.id)
+    task = service.repository.get_for_user(task_id, user.id)
+    return to_task_response(task, service)
 
 
 @app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
