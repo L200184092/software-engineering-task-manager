@@ -1254,3 +1254,158 @@ def test_task_statistics_requires_authentication(client):
     response = client.get("/tasks/statistics")
 
     assert response.status_code == 401
+
+
+def test_task_dashboard_returns_correct_summary_and_deadline_overview(client):
+    headers = register_and_login(client, "dashboard_user", "dashboard@example.com")
+
+    today = datetime.now().date()
+
+    tasks = [
+        ("Tugas overdue", "Low", (today - timedelta(days=1)).isoformat()),
+        ("Tugas hari ini", "Medium", today.isoformat()),
+        ("Tugas upcoming", "High", (today + timedelta(days=3)).isoformat()),
+        ("Tugas future", "High", (today + timedelta(days=10)).isoformat()),
+        ("Tanpa deadline", "Low", None),
+        ("Tugas selesai", "Medium", (today - timedelta(days=2)).isoformat()),
+    ]
+
+    task_ids = []
+
+    for title, priority, due_date in tasks:
+        response = client.post(
+            "/tasks",
+            headers=headers,
+            json={
+                "title": title,
+                "priority": priority,
+                "due_date": due_date,
+            },
+        )
+        assert response.status_code == 201, response.text
+        task_ids.append(response.json()["id"])
+
+    completed = client.patch(
+        f"/tasks/{task_ids[5]}/complete",
+        headers=headers,
+    )
+    assert completed.status_code == 200
+
+    response = client.get("/tasks/dashboard", headers=headers)
+
+    assert response.status_code == 200, response.text
+
+    data = response.json()
+
+    assert data["summary"] == {
+        "total_tasks": 6,
+        "completed_tasks": 1,
+        "pending_tasks": 5,
+        "completion_rate": 16.67,
+    }
+
+    assert data["deadline_overview"] == {
+        "overdue": 1,
+        "due_today": 1,
+        "upcoming": 1,
+        "future": 1,
+        "no_deadline": 1,
+        "completed": 1,
+    }
+
+
+def test_task_dashboard_limits_and_sorts_task_lists(client):
+    headers = register_and_login(
+        client, "dashboard_sort_user", "dashboardsort@example.com"
+    )
+
+    today = datetime.now().date()
+
+    tasks = [
+        ("High tanpa deadline", "High", None),
+        ("High deadline 5", "High", (today + timedelta(days=5)).isoformat()),
+        ("High deadline 2", "High", (today + timedelta(days=2)).isoformat()),
+        ("High deadline 1", "High", (today + timedelta(days=1)).isoformat()),
+        ("High deadline 4", "High", (today + timedelta(days=4)).isoformat()),
+        ("High deadline 3", "High", (today + timedelta(days=3)).isoformat()),
+        ("Medium deadline 1", "Medium", (today + timedelta(days=1)).isoformat()),
+        ("Overdue High", "High", (today - timedelta(days=1)).isoformat()),
+    ]
+
+    for title, priority, due_date in tasks:
+        response = client.post(
+            "/tasks",
+            headers=headers,
+            json={
+                "title": title,
+                "priority": priority,
+                "due_date": due_date,
+            },
+        )
+        assert response.status_code == 201, response.text
+
+    response = client.get("/tasks/dashboard", headers=headers)
+
+    assert response.status_code == 200, response.text
+
+    data = response.json()
+
+    priority_tasks = data["priority_tasks"]
+    upcoming_deadlines = data["upcoming_deadlines"]
+
+    assert len(priority_tasks) == 5
+    assert [task["title"] for task in priority_tasks] == [
+        "Overdue High",
+        "High deadline 1",
+        "High deadline 2",
+        "High deadline 3",
+        "High deadline 4",
+    ]
+
+    assert len(upcoming_deadlines) == 5
+    assert [task["title"] for task in upcoming_deadlines] == [
+        "High deadline 1",
+        "Medium deadline 1",
+        "High deadline 2",
+        "High deadline 3",
+        "High deadline 4",
+    ]
+
+
+def test_task_dashboard_preserves_user_isolation(client):
+    user_one = register_and_login(
+        client, "dashboard_user_one", "dashboard1@example.com"
+    )
+    user_two = register_and_login(
+        client, "dashboard_user_two", "dashboard2@example.com"
+    )
+
+    for number in range(3):
+        response = client.post(
+            "/tasks",
+            headers=user_one,
+            json={"title": f"Tugas pengguna pertama {number + 1}"},
+        )
+        assert response.status_code == 201, response.text
+
+    response = client.post(
+        "/tasks",
+        headers=user_two,
+        json={"title": "Tugas pengguna kedua"},
+    )
+    assert response.status_code == 201, response.text
+
+    dashboard_one = client.get("/tasks/dashboard", headers=user_one)
+    dashboard_two = client.get("/tasks/dashboard", headers=user_two)
+
+    assert dashboard_one.status_code == 200
+    assert dashboard_two.status_code == 200
+
+    assert dashboard_one.json()["summary"]["total_tasks"] == 3
+    assert dashboard_two.json()["summary"]["total_tasks"] == 1
+
+
+def test_task_dashboard_requires_authentication(client):
+    response = client.get("/tasks/dashboard")
+
+    assert response.status_code == 401

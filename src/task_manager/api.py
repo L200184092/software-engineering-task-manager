@@ -285,6 +285,14 @@ def get_task_statistics(
     return service.get_user_task_statistics(user.id)
 
 
+@app.get("/tasks/dashboard")
+def get_task_dashboard(
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    return service.get_user_task_dashboard(user.id)
+
+
 @app.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 def create_task(
     payload: TaskCreate,

@@ -282,6 +282,86 @@ class TaskService:
             "deadline_distribution": deadline_distribution,
         }
 
+    def get_user_task_dashboard(self, user_id: int) -> dict:
+        """Menyusun ringkasan dashboard tugas milik pengguna."""
+        tasks = self.repository.get_all_for_user_statistics(user_id)
+        today = date.today()
+
+        total = len(tasks)
+        completed = sum(1 for task in tasks if task.completed)
+        pending = total - completed
+
+        deadline_overview = {
+            "overdue": 0,
+            "due_today": 0,
+            "upcoming": 0,
+            "future": 0,
+            "no_deadline": 0,
+            "completed": 0,
+        }
+
+        status_mapping = {
+            "Overdue": "overdue",
+            "Due Today": "due_today",
+            "Upcoming": "upcoming",
+            "Future": "future",
+            "No Deadline": "no_deadline",
+            "Completed": "completed",
+        }
+
+        for task in tasks:
+            status = self.get_deadline_status(task, today=today)
+            deadline_overview[status_mapping[status]] += 1
+
+        priority_tasks = sorted(
+            [task for task in tasks if not task.completed and task.priority == "High"],
+            key=lambda task: (
+                task.due_date is None,
+                task.due_date or "",
+                task.id or 0,
+            ),
+        )[:5]
+
+        upcoming_deadlines = sorted(
+            [
+                task
+                for task in tasks
+                if (
+                    not task.completed
+                    and task.due_date is not None
+                    and task.due_date >= today.isoformat()
+                )
+            ],
+            key=lambda task: (task.due_date, task.id or 0),
+        )[:5]
+
+        def serialize_task(task: Task) -> dict:
+            return {
+                "id": task.id,
+                "title": task.title,
+                "description": task.description,
+                "priority": task.priority,
+                "due_date": task.due_date,
+                "deadline_status": self.get_deadline_status(
+                    task,
+                    today=today,
+                ),
+            }
+
+        return {
+            "summary": {
+                "total_tasks": total,
+                "completed_tasks": completed,
+                "pending_tasks": pending,
+                "completion_rate": (
+                    round((completed / total) * 100, 2) if total > 0 else 0.0
+                ),
+            },
+            "deadline_overview": deadline_overview,
+            "priority_tasks": [serialize_task(task) for task in priority_tasks],
+            "upcoming_deadlines": [serialize_task(task) for task in upcoming_deadlines],
+        }
+
     def export_tasks_to_csv(self, file_path: str | Path) -> int:
         """Mengekspor semua tugas ke file CSV."""
         tasks = self.list_tasks()
