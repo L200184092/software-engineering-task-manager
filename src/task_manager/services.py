@@ -235,6 +235,53 @@ class TaskService:
             "priority_counts": priority_counts,
         }
 
+    def get_user_task_statistics(self, user_id: int) -> dict:
+        """Menghitung statistik tugas milik pengguna tertentu."""
+        tasks = self.repository.get_all_for_user_statistics(user_id)
+
+        total = len(tasks)
+        completed = sum(1 for task in tasks if task.completed)
+        pending = total - completed
+
+        priority_distribution = {
+            "low": sum(1 for task in tasks if task.priority == "Low"),
+            "medium": sum(1 for task in tasks if task.priority == "Medium"),
+            "high": sum(1 for task in tasks if task.priority == "High"),
+        }
+
+        deadline_distribution = {
+            "overdue": 0,
+            "due_today": 0,
+            "upcoming": 0,
+            "future": 0,
+            "no_deadline": 0,
+            "completed": 0,
+        }
+
+        status_mapping = {
+            "Overdue": "overdue",
+            "Due Today": "due_today",
+            "Upcoming": "upcoming",
+            "Future": "future",
+            "No Deadline": "no_deadline",
+            "Completed": "completed",
+        }
+
+        for task in tasks:
+            status = self.get_deadline_status(task)
+            deadline_distribution[status_mapping[status]] += 1
+
+        completion_rate = round((completed / total) * 100, 2) if total > 0 else 0.0
+
+        return {
+            "total_tasks": total,
+            "completed_tasks": completed,
+            "pending_tasks": pending,
+            "completion_rate": completion_rate,
+            "priority_distribution": priority_distribution,
+            "deadline_distribution": deadline_distribution,
+        }
+
     def export_tasks_to_csv(self, file_path: str | Path) -> int:
         """Mengekspor semua tugas ke file CSV."""
         tasks = self.list_tasks()

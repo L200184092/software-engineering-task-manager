@@ -248,3 +248,17 @@ class TaskRepository:
                 "DELETE FROM tasks WHERE id=? AND user_id=?", (task_id, user_id)
             )
         return cursor.rowcount > 0
+
+    def get_all_for_user_statistics(self, user_id: int) -> list[Task]:
+        """Mengambil seluruh tugas milik pengguna untuk perhitungan statistik."""
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT id, title, description, completed, priority, due_date
+                FROM tasks
+                WHERE user_id = ?
+                """,
+                (user_id,),
+            ).fetchall()
+
+        return [self._task(row) for row in rows]

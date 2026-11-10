@@ -1101,3 +1101,156 @@ def test_api_returns_correct_deadline_status(client):
 
     assert completed.status_code == 200
     assert completed.json()["deadline_status"] == "Completed"
+
+
+def test_task_statistics_returns_correct_distribution(client):
+    headers = register_and_login(client, "statistics_user", "statistics@example.com")
+
+    today = datetime.now().date()
+
+    tasks = [
+        ("Tugas overdue", "Low", (today - timedelta(days=1)).isoformat()),
+        ("Tugas hari ini", "Medium", today.isoformat()),
+        ("Tugas upcoming", "High", (today + timedelta(days=3)).isoformat()),
+        ("Tugas future", "High", (today + timedelta(days=10)).isoformat()),
+        ("Tanpa deadline", "Low", None),
+        ("Tugas selesai", "Medium", (today - timedelta(days=2)).isoformat()),
+    ]
+
+    task_ids = []
+
+    for title, priority, due_date in tasks:
+        response = client.post(
+            "/tasks",
+            headers=headers,
+            json={
+                "title": title,
+                "priority": priority,
+                "due_date": due_date,
+            },
+        )
+        assert response.status_code == 201, response.text
+        task_ids.append(response.json()["id"])
+
+    # Selesaikan satu tugas yang sebelumnya overdue.
+    completed = client.patch(
+        f"/tasks/{task_ids[5]}/complete",
+        headers=headers,
+    )
+    assert completed.status_code == 200
+
+    response = client.get("/tasks/statistics", headers=headers)
+
+    assert response.status_code == 200, response.text
+
+    data = response.json()
+
+    assert data["total_tasks"] == 6
+    assert data["completed_tasks"] == 1
+    assert data["pending_tasks"] == 5
+    assert data["completion_rate"] == 16.67
+
+    assert data["priority_distribution"] == {
+        "low": 2,
+        "medium": 2,
+        "high": 2,
+    }
+
+    assert data["deadline_distribution"] == {
+        "overdue": 1,
+        "due_today": 1,
+        "upcoming": 1,
+        "future": 1,
+        "no_deadline": 1,
+        "completed": 1,
+    }
+
+
+def test_task_statistics_counts_all_tasks_without_pagination(client):
+    headers = register_and_login(
+        client, "statistics_page_user", "statisticspage@example.com"
+    )
+
+    for number in range(25):
+        response = client.post(
+            "/tasks",
+            headers=headers,
+            json={"title": f"Tugas {number + 1}"},
+        )
+        assert response.status_code == 201, response.text
+
+    response = client.get("/tasks/statistics", headers=headers)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["total_tasks"] == 25
+    assert response.json()["pending_tasks"] == 25
+    assert response.json()["completed_tasks"] == 0
+
+
+def test_task_statistics_preserves_user_isolation(client):
+    user_one = register_and_login(
+        client, "statistics_user_one", "statistics1@example.com"
+    )
+    user_two = register_and_login(
+        client, "statistics_user_two", "statistics2@example.com"
+    )
+
+    for number in range(3):
+        response = client.post(
+            "/tasks",
+            headers=user_one,
+            json={"title": f"Tugas pengguna pertama {number + 1}"},
+        )
+        assert response.status_code == 201, response.text
+
+    response = client.post(
+        "/tasks",
+        headers=user_two,
+        json={"title": "Tugas pengguna kedua"},
+    )
+    assert response.status_code == 201, response.text
+
+    statistics_one = client.get("/tasks/statistics", headers=user_one)
+    statistics_two = client.get("/tasks/statistics", headers=user_two)
+
+    assert statistics_one.status_code == 200
+    assert statistics_two.status_code == 200
+
+    assert statistics_one.json()["total_tasks"] == 3
+    assert statistics_two.json()["total_tasks"] == 1
+
+
+def test_task_statistics_returns_zero_for_empty_user(client):
+    headers = register_and_login(
+        client, "empty_statistics_user", "empty_statistics@example.com"
+    )
+
+    response = client.get("/tasks/statistics", headers=headers)
+
+    assert response.status_code == 200, response.text
+
+    assert response.json() == {
+        "total_tasks": 0,
+        "completed_tasks": 0,
+        "pending_tasks": 0,
+        "completion_rate": 0.0,
+        "priority_distribution": {
+            "low": 0,
+            "medium": 0,
+            "high": 0,
+        },
+        "deadline_distribution": {
+            "overdue": 0,
+            "due_today": 0,
+            "upcoming": 0,
+            "future": 0,
+            "no_deadline": 0,
+            "completed": 0,
+        },
+    }
+
+
+def test_task_statistics_requires_authentication(client):
+    response = client.get("/tasks/statistics")
+
+    assert response.status_code == 401

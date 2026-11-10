@@ -277,6 +277,14 @@ def list_tasks(
     return [to_task_response(task, service) for task in tasks]
 
 
+@app.get("/tasks/statistics")
+def get_task_statistics(
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    return service.get_user_task_statistics(user.id)
+
+
 @app.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 def create_task(
     payload: TaskCreate,
