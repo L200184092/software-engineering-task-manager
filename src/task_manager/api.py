@@ -14,10 +14,10 @@ from .auth import (
     hash_password,
     verify_password,
 )
-from .database import get_connection
-from .models import Category, Task, User
 from .category_repository import CategoryRepository
 from .category_services import CategoryService
+from .database import get_connection
+from .models import Task, User
 from .repository import TaskRepository
 from .services import TaskService
 from .user_repository import UserRepository

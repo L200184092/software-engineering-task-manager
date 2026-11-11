@@ -1,9 +1,9 @@
 
 import pytest
 
+from task_manager.auth import hash_password
 from task_manager.category_repository import CategoryRepository
 from task_manager.category_services import CategoryService
-from task_manager.auth import hash_password
 from task_manager.models import User
 from task_manager.user_repository import UserRepository
 
