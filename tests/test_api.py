@@ -1257,6 +1257,15 @@ def test_task_statistics_returns_zero_for_empty_user(client):
             "no_deadline": 0,
             "completed": 0,
         },
+        "category_distribution": [
+            {
+                "category_id": None,
+                "category_name": "Uncategorized",
+                "total_tasks": 0,
+                "completed_tasks": 0,
+                "pending_tasks": 0,
+            }
+        ],
     }
 
 

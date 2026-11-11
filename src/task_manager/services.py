@@ -2,6 +2,7 @@ from datetime import date
 from pathlib import Path
 from typing import ClassVar
 
+from .category_repository import CategoryRepository
 from .csv_handler import export_tasks, read_tasks
 from .models import Task
 from .repository import TaskRepository
@@ -14,8 +15,15 @@ class TaskService:
 
     VALID_PRIORITIES: ClassVar[set[str]] = {"Low", "Medium", "High"}
 
-    def __init__(self, repository: TaskRepository | None = None) -> None:
+    def __init__(
+        self,
+        repository: TaskRepository | None = None,
+        category_repository: CategoryRepository | None = None,
+    ) -> None:
         self.repository = repository or TaskRepository()
+        self.category_repository = category_repository or CategoryRepository(
+            db_path=self.repository.db_path
+        )
 
     @staticmethod
     def validate_due_date(due_date: str | None) -> str | None:
@@ -235,6 +243,38 @@ class TaskService:
             "priority_counts": priority_counts,
         }
 
+    def _get_category_distribution(self, user_id: int, tasks: list[Task]) -> list[dict]:
+        """Menghitung jumlah tugas per kategori milik pengguna."""
+        categories = self.category_repository.get_all_for_user(user_id)
+        distribution = []
+
+        for category in categories:
+            category_tasks = [task for task in tasks if task.category_id == category.id]
+            completed = sum(1 for task in category_tasks if task.completed)
+            distribution.append(
+                {
+                    "category_id": category.id,
+                    "category_name": category.name,
+                    "total_tasks": len(category_tasks),
+                    "completed_tasks": completed,
+                    "pending_tasks": len(category_tasks) - completed,
+                }
+            )
+
+        uncategorized_tasks = [task for task in tasks if task.category_id is None]
+        completed = sum(1 for task in uncategorized_tasks if task.completed)
+        distribution.append(
+            {
+                "category_id": None,
+                "category_name": "Uncategorized",
+                "total_tasks": len(uncategorized_tasks),
+                "completed_tasks": completed,
+                "pending_tasks": len(uncategorized_tasks) - completed,
+            }
+        )
+
+        return distribution
+
     def get_user_task_statistics(self, user_id: int) -> dict:
         """Menghitung statistik tugas milik pengguna tertentu."""
         tasks = self.repository.get_all_for_user_statistics(user_id)
@@ -280,6 +320,7 @@ class TaskService:
             "completion_rate": completion_rate,
             "priority_distribution": priority_distribution,
             "deadline_distribution": deadline_distribution,
+            "category_distribution": self._get_category_distribution(user_id, tasks),
         }
 
     def get_user_task_dashboard(self, user_id: int) -> dict:
@@ -335,6 +376,9 @@ class TaskService:
             key=lambda task: (task.due_date, task.id or 0),
         )[:5]
 
+        categories = self.category_repository.get_all_for_user(user_id)
+        category_names = {category.id: category.name for category in categories}
+
         def serialize_task(task: Task) -> dict:
             return {
                 "id": task.id,
@@ -342,6 +386,8 @@ class TaskService:
                 "description": task.description,
                 "priority": task.priority,
                 "due_date": task.due_date,
+                "category_id": task.category_id,
+                "category_name": category_names.get(task.category_id),
                 "deadline_status": self.get_deadline_status(
                     task,
                     today=today,
@@ -358,6 +404,7 @@ class TaskService:
                 ),
             },
             "deadline_overview": deadline_overview,
+            "category_distribution": self._get_category_distribution(user_id, tasks),
             "priority_tasks": [serialize_task(task) for task in priority_tasks],
             "upcoming_deadlines": [serialize_task(task) for task in upcoming_deadlines],
         }
