@@ -23,6 +23,7 @@ class User:
     password_hash: str
     id: int | None = None
 
+
 @dataclass
 class Category:
     """Representasi satu kategori tugas."""

@@ -26,9 +26,7 @@ def client(tmp_path):
     init_db(db_path)
 
     service = TaskService(repository=TaskRepository(db_path=db_path))
-    categories = CategoryService(
-        repository=CategoryRepository(db_path=db_path)
-    )
+    categories = CategoryService(repository=CategoryRepository(db_path=db_path))
     users = UserRepository(db_path=db_path)
 
     app.dependency_overrides[get_task_service] = lambda: service
@@ -1422,6 +1420,7 @@ def test_task_dashboard_requires_authentication(client):
 
     assert response.status_code == 401
 
+
 # ---------------------------------------------------------------------------
 # Category API integration tests
 # ---------------------------------------------------------------------------
@@ -1476,7 +1475,9 @@ def test_category_crud_with_authentication(client):
 
 
 def test_category_name_is_trimmed_and_duplicate_is_rejected(client):
-    headers = register_and_login(client, "category_duplicate", "categorydup@example.com")
+    headers = register_and_login(
+        client, "category_duplicate", "categorydup@example.com"
+    )
 
     first = client.post(
         "/categories",
@@ -1529,8 +1530,12 @@ def test_users_can_only_list_their_own_categories(client):
 
 
 def test_user_cannot_update_or_delete_another_users_category(client):
-    user_one = register_and_login(client, "category_access_one", "cataccess1@example.com")
-    user_two = register_and_login(client, "category_access_two", "cataccess2@example.com")
+    user_one = register_and_login(
+        client, "category_access_one", "cataccess1@example.com"
+    )
+    user_two = register_and_login(
+        client, "category_access_two", "cataccess2@example.com"
+    )
 
     created = client.post("/categories", headers=user_one, json={"name": "Private"})
     assert created.status_code == 201, created.text
@@ -1552,7 +1557,9 @@ def test_user_cannot_update_or_delete_another_users_category(client):
 
 
 def test_task_can_be_created_with_category(client):
-    headers = register_and_login(client, "task_category_user", "taskcategory@example.com")
+    headers = register_and_login(
+        client, "task_category_user", "taskcategory@example.com"
+    )
 
     category = client.post(
         "/categories",
@@ -1617,9 +1624,7 @@ def test_task_patch_can_change_and_clear_category(client):
         client, "task_cat_patch_user", "taskcatpatch@example.com"
     )
 
-    first_category = client.post(
-        "/categories", headers=headers, json={"name": "Work"}
-    )
+    first_category = client.post("/categories", headers=headers, json={"name": "Work"})
     second_category = client.post(
         "/categories", headers=headers, json={"name": "Personal"}
     )
@@ -1662,9 +1667,7 @@ def test_task_patch_rejects_category_owned_by_another_user(client):
         client, "patch_cat_other", "patchcatother@example.com"
     )
 
-    category = client.post(
-        "/categories", headers=user_one, json={"name": "Private"}
-    )
+    category = client.post("/categories", headers=user_one, json={"name": "Private"})
     task = client.post(
         "/tasks", headers=user_two, json={"title": "Tugas pengguna kedua"}
     )
@@ -1684,9 +1687,7 @@ def test_deleting_category_keeps_tasks_and_clears_category_id(client):
         client, "delete_category_user", "deletecategory@example.com"
     )
 
-    category = client.post(
-        "/categories", headers=headers, json={"name": "Work"}
-    )
+    category = client.post("/categories", headers=headers, json={"name": "Work"})
     assert category.status_code == 201, category.text
 
     task = client.post(

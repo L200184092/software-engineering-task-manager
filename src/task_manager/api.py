@@ -233,8 +233,7 @@ def list_categories(
 ):
     categories = service.get_categories(user.id)
     return [
-        CategoryResponse(id=category.id, name=category.name)
-        for category in categories
+        CategoryResponse(id=category.id, name=category.name) for category in categories
     ]
 
 
@@ -269,8 +268,10 @@ def update_category(
         category = service.update_category(category_id, user.id, payload.name)
     except ValueError as exc:
         message = str(exc)
-        code = 404 if "tidak ditemukan" in message.lower() else (
-            409 if "sudah digunakan" in message.lower() else 422
+        code = (
+            404
+            if "tidak ditemukan" in message.lower()
+            else (409 if "sudah digunakan" in message.lower() else 422)
         )
         raise HTTPException(status_code=code, detail=message) from exc
 

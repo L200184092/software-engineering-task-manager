@@ -1,4 +1,3 @@
-
 import pytest
 
 from task_manager.auth import hash_password

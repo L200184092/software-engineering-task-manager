@@ -1,4 +1,3 @@
-
 import sqlite3
 
 from .category_repository import CategoryRepository
@@ -20,9 +19,7 @@ class CategoryService:
         try:
             return self.repository.create_for_user(category)
         except sqlite3.IntegrityError as exc:
-            raise ValueError(
-                "Nama kategori sudah digunakan."
-            ) from exc
+            raise ValueError("Nama kategori sudah digunakan.") from exc
 
     def get_categories(self, user_id: int) -> list[Category]:
         """Mengambil seluruh kategori milik pengguna."""
@@ -56,9 +53,7 @@ class CategoryService:
                 name,
             )
         except sqlite3.IntegrityError as exc:
-            raise ValueError(
-                "Nama kategori sudah digunakan."
-            ) from exc
+            raise ValueError("Nama kategori sudah digunakan.") from exc
 
         existing.name = name
         return existing
