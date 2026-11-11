@@ -15,7 +15,9 @@ from .auth import (
     verify_password,
 )
 from .database import get_connection
-from .models import Task, User
+from .models import Category, Task, User
+from .category_repository import CategoryRepository
+from .category_services import CategoryService
 from .repository import TaskRepository
 from .services import TaskService
 from .user_repository import UserRepository
@@ -42,6 +44,10 @@ def get_task_service() -> TaskService:
 
 def get_user_repository() -> UserRepository:
     return UserRepository()
+
+
+def get_category_service() -> CategoryService:
+    return CategoryService(repository=CategoryRepository())
 
 
 class RegisterRequest(BaseModel):
@@ -75,6 +81,7 @@ class TaskCreate(BaseModel):
     description: str = ""
     priority: str = "Medium"
     due_date: str | None = None
+    category_id: int | None = Field(default=None, ge=1)
 
 
 class TaskUpdate(BaseModel):
@@ -84,6 +91,7 @@ class TaskUpdate(BaseModel):
     description: str
     priority: str
     due_date: str | None
+    category_id: int | None = Field(default=None, ge=1)
 
 
 class TaskPatch(BaseModel):
@@ -95,6 +103,20 @@ class TaskPatch(BaseModel):
     description: str | None = None
     priority: str | None = None
     due_date: str | None = None
+    category_id: int | None = Field(default=None, ge=1)
+
+
+class CategoryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+class CategoryUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+class CategoryResponse(BaseModel):
+    id: int
+    name: str
 
 
 class TaskResponse(BaseModel):
@@ -105,6 +127,7 @@ class TaskResponse(BaseModel):
     completed: bool
     priority: str
     due_date: str | None
+    category_id: int | None
     deadline_status: str
 
 
@@ -116,6 +139,7 @@ def to_task_response(task: Task, service: TaskService) -> TaskResponse:
         completed=task.completed,
         priority=task.priority,
         due_date=task.due_date,
+        category_id=task.category_id,
         deadline_status=service.get_deadline_status(task),
     )
 
@@ -200,6 +224,72 @@ def login(
         )
 
     return TokenResponse(access_token=create_access_token(str(user.id)))
+
+
+@app.get("/categories", response_model=list[CategoryResponse])
+def list_categories(
+    user: User = Depends(get_current_user),
+    service: CategoryService = Depends(get_category_service),
+):
+    categories = service.get_categories(user.id)
+    return [
+        CategoryResponse(id=category.id, name=category.name)
+        for category in categories
+    ]
+
+
+@app.post(
+    "/categories",
+    response_model=CategoryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_category(
+    payload: CategoryCreate,
+    user: User = Depends(get_current_user),
+    service: CategoryService = Depends(get_category_service),
+):
+    try:
+        category = service.create_category(payload.name, user.id)
+    except ValueError as exc:
+        message = str(exc)
+        code = 409 if "sudah digunakan" in message.lower() else 422
+        raise HTTPException(status_code=code, detail=message) from exc
+
+    return CategoryResponse(id=category.id, name=category.name)
+
+
+@app.patch("/categories/{category_id}", response_model=CategoryResponse)
+def update_category(
+    category_id: int,
+    payload: CategoryUpdate,
+    user: User = Depends(get_current_user),
+    service: CategoryService = Depends(get_category_service),
+):
+    try:
+        category = service.update_category(category_id, user.id, payload.name)
+    except ValueError as exc:
+        message = str(exc)
+        code = 404 if "tidak ditemukan" in message.lower() else (
+            409 if "sudah digunakan" in message.lower() else 422
+        )
+        raise HTTPException(status_code=code, detail=message) from exc
+
+    return CategoryResponse(id=category.id, name=category.name)
+
+
+@app.delete(
+    "/categories/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_category(
+    category_id: int,
+    user: User = Depends(get_current_user),
+    service: CategoryService = Depends(get_category_service),
+):
+    try:
+        service.delete_category(category_id, user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/tasks", response_model=list[TaskResponse])
@@ -298,6 +388,7 @@ def create_task(
     payload: TaskCreate,
     user: User = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
+    category_service: CategoryService = Depends(get_category_service),
 ):
     try:
         title = payload.title.strip()
@@ -306,12 +397,17 @@ def create_task(
             raise ValueError("Judul tugas tidak boleh kosong.")
         priority = service.validate_priority(payload.priority)
         due_date = service.validate_due_date(payload.due_date)
+        if payload.category_id is not None:
+            category = category_service.get_category(payload.category_id, user.id)
+            if category is None:
+                raise HTTPException(status_code=404, detail="Category not found")
         task = service.repository.create_for_user(
             Task(
                 title=title,
                 description=description,
                 priority=priority,
                 due_date=due_date,
+                category_id=payload.category_id,
             ),
             user.id,
         )
@@ -340,6 +436,7 @@ def update_task(
     payload: TaskUpdate,
     user: User = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
+    category_service: CategoryService = Depends(get_category_service),
 ):
     try:
         title = payload.title.strip()
@@ -348,6 +445,10 @@ def update_task(
             raise ValueError("Judul tugas tidak boleh kosong.")
         priority = service.validate_priority(payload.priority or "Medium")
         due_date = service.validate_due_date(payload.due_date)
+        if payload.category_id is not None:
+            category = category_service.get_category(payload.category_id, user.id)
+            if category is None:
+                raise HTTPException(status_code=404, detail="Category not found")
         updated = service.repository.update_for_user(
             task_id,
             user.id,
@@ -355,6 +456,7 @@ def update_task(
             description=description,
             priority=priority,
             due_date=due_date,
+            category_id=payload.category_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -370,6 +472,7 @@ def patch_task(
     payload: TaskPatch,
     user: User = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
+    category_service: CategoryService = Depends(get_category_service),
 ):
     fields = payload.model_dump(exclude_unset=True)
 
@@ -402,6 +505,11 @@ def patch_task(
 
         if "due_date" in fields:
             fields["due_date"] = service.validate_due_date(fields["due_date"])
+
+        if "category_id" in fields and fields["category_id"] is not None:
+            category = category_service.get_category(fields["category_id"], user.id)
+            if category is None:
+                raise HTTPException(status_code=404, detail="Category not found")
 
         updated = service.repository.update_fields_for_user(
             task_id,

@@ -3,7 +3,15 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from task_manager.api import app, get_task_service, get_user_repository, limiter
+from task_manager.api import (
+    app,
+    get_category_service,
+    get_task_service,
+    get_user_repository,
+    limiter,
+)
+from task_manager.category_repository import CategoryRepository
+from task_manager.category_services import CategoryService
 from task_manager.database import init_db
 from task_manager.repository import TaskRepository
 from task_manager.services import TaskService
@@ -18,9 +26,13 @@ def client(tmp_path):
     init_db(db_path)
 
     service = TaskService(repository=TaskRepository(db_path=db_path))
+    categories = CategoryService(
+        repository=CategoryRepository(db_path=db_path)
+    )
     users = UserRepository(db_path=db_path)
 
     app.dependency_overrides[get_task_service] = lambda: service
+    app.dependency_overrides[get_category_service] = lambda: categories
     app.dependency_overrides[get_user_repository] = lambda: users
 
     try:
@@ -1409,3 +1421,292 @@ def test_task_dashboard_requires_authentication(client):
     response = client.get("/tasks/dashboard")
 
     assert response.status_code == 401
+
+# ---------------------------------------------------------------------------
+# Category API integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_categories_require_authentication(client):
+    for method, url in [
+        ("get", "/categories"),
+        ("post", "/categories"),
+        ("patch", "/categories/1"),
+        ("delete", "/categories/1"),
+    ]:
+        if method in {"post", "patch"}:
+            response = getattr(client, method)(url, json={"name": "Work"})
+        else:
+            response = getattr(client, method)(url)
+
+        assert response.status_code == 401, (method, url, response.text)
+
+
+def test_category_crud_with_authentication(client):
+    headers = register_and_login(client, "category_user", "category@example.com")
+
+    created = client.post(
+        "/categories",
+        headers=headers,
+        json={"name": "Work"},
+    )
+    assert created.status_code == 201, created.text
+    category = created.json()
+    assert category["name"] == "Work"
+    category_id = category["id"]
+
+    listed = client.get("/categories", headers=headers)
+    assert listed.status_code == 200, listed.text
+    assert any(item["id"] == category_id for item in listed.json())
+
+    updated = client.patch(
+        f"/categories/{category_id}",
+        headers=headers,
+        json={"name": "Professional"},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["name"] == "Professional"
+
+    deleted = client.delete(f"/categories/{category_id}", headers=headers)
+    assert deleted.status_code == 204, deleted.text
+    assert all(
+        item["id"] != category_id
+        for item in client.get("/categories", headers=headers).json()
+    )
+
+
+def test_category_name_is_trimmed_and_duplicate_is_rejected(client):
+    headers = register_and_login(client, "category_duplicate", "categorydup@example.com")
+
+    first = client.post(
+        "/categories",
+        headers=headers,
+        json={"name": "  Personal  "},
+    )
+    assert first.status_code == 201, first.text
+    assert first.json()["name"] == "Personal"
+
+    duplicate = client.post(
+        "/categories",
+        headers=headers,
+        json={"name": "Personal"},
+    )
+    assert duplicate.status_code == 409, duplicate.text
+
+
+def test_category_rejects_empty_name(client):
+    headers = register_and_login(client, "category_empty", "categoryempty@example.com")
+
+    response = client.post(
+        "/categories",
+        headers=headers,
+        json={"name": "   "},
+    )
+    assert response.status_code == 422, response.text
+
+
+def test_category_names_are_unique_per_user_not_globally(client):
+    user_one = register_and_login(client, "category_owner_one", "catowner1@example.com")
+    user_two = register_and_login(client, "category_owner_two", "catowner2@example.com")
+
+    first = client.post("/categories", headers=user_one, json={"name": "Work"})
+    second = client.post("/categories", headers=user_two, json={"name": "Work"})
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+
+
+def test_users_can_only_list_their_own_categories(client):
+    user_one = register_and_login(client, "category_list_one", "catlist1@example.com")
+    user_two = register_and_login(client, "category_list_two", "catlist2@example.com")
+
+    created = client.post("/categories", headers=user_one, json={"name": "Private"})
+    assert created.status_code == 201, created.text
+
+    response = client.get("/categories", headers=user_two)
+    assert response.status_code == 200, response.text
+    assert response.json() == []
+
+
+def test_user_cannot_update_or_delete_another_users_category(client):
+    user_one = register_and_login(client, "category_access_one", "cataccess1@example.com")
+    user_two = register_and_login(client, "category_access_two", "cataccess2@example.com")
+
+    created = client.post("/categories", headers=user_one, json={"name": "Private"})
+    assert created.status_code == 201, created.text
+    category_id = created.json()["id"]
+
+    update = client.patch(
+        f"/categories/{category_id}",
+        headers=user_two,
+        json={"name": "Hijacked"},
+    )
+    assert update.status_code == 404
+
+    delete = client.delete(f"/categories/{category_id}", headers=user_two)
+    assert delete.status_code == 404
+
+    original = client.get("/categories", headers=user_one)
+    assert original.status_code == 200
+    assert original.json()[0]["name"] == "Private"
+
+
+def test_task_can_be_created_with_category(client):
+    headers = register_and_login(client, "task_category_user", "taskcategory@example.com")
+
+    category = client.post(
+        "/categories",
+        headers=headers,
+        json={"name": "Education"},
+    )
+    assert category.status_code == 201, category.text
+    category_id = category.json()["id"]
+
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Belajar FastAPI", "category_id": category_id},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["category_id"] == category_id
+
+    detail = client.get(f"/tasks/{created.json()['id']}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["category_id"] == category_id
+
+
+def test_task_can_be_created_without_category(client):
+    headers = register_and_login(
+        client, "task_no_category_user", "tasknocategory@example.com"
+    )
+
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Tugas tanpa kategori"},
+    )
+
+    assert created.status_code == 201, created.text
+    assert created.json()["category_id"] is None
+
+
+def test_task_rejects_category_owned_by_another_user(client):
+    user_one = register_and_login(client, "task_cat_owner", "taskcatowner@example.com")
+    user_two = register_and_login(client, "task_cat_other", "taskcatother@example.com")
+
+    category = client.post(
+        "/categories",
+        headers=user_one,
+        json={"name": "Private"},
+    )
+    assert category.status_code == 201, category.text
+
+    response = client.post(
+        "/tasks",
+        headers=user_two,
+        json={
+            "title": "Mencoba memakai kategori orang lain",
+            "category_id": category.json()["id"],
+        },
+    )
+    assert response.status_code == 404, response.text
+
+
+def test_task_patch_can_change_and_clear_category(client):
+    headers = register_and_login(
+        client, "task_cat_patch_user", "taskcatpatch@example.com"
+    )
+
+    first_category = client.post(
+        "/categories", headers=headers, json={"name": "Work"}
+    )
+    second_category = client.post(
+        "/categories", headers=headers, json={"name": "Personal"}
+    )
+    assert first_category.status_code == 201
+    assert second_category.status_code == 201
+
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={
+            "title": "Tugas yang dikategorikan",
+            "category_id": first_category.json()["id"],
+        },
+    )
+    assert created.status_code == 201, created.text
+    task_id = created.json()["id"]
+
+    changed = client.patch(
+        f"/tasks/{task_id}",
+        headers=headers,
+        json={"category_id": second_category.json()["id"]},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["category_id"] == second_category.json()["id"]
+
+    cleared = client.patch(
+        f"/tasks/{task_id}",
+        headers=headers,
+        json={"category_id": None},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["category_id"] is None
+
+
+def test_task_patch_rejects_category_owned_by_another_user(client):
+    user_one = register_and_login(
+        client, "patch_cat_owner", "patchcatowner@example.com"
+    )
+    user_two = register_and_login(
+        client, "patch_cat_other", "patchcatother@example.com"
+    )
+
+    category = client.post(
+        "/categories", headers=user_one, json={"name": "Private"}
+    )
+    task = client.post(
+        "/tasks", headers=user_two, json={"title": "Tugas pengguna kedua"}
+    )
+    assert category.status_code == 201
+    assert task.status_code == 201
+
+    response = client.patch(
+        f"/tasks/{task.json()['id']}",
+        headers=user_two,
+        json={"category_id": category.json()["id"]},
+    )
+    assert response.status_code == 404, response.text
+
+
+def test_deleting_category_keeps_tasks_and_clears_category_id(client):
+    headers = register_and_login(
+        client, "delete_category_user", "deletecategory@example.com"
+    )
+
+    category = client.post(
+        "/categories", headers=headers, json={"name": "Work"}
+    )
+    assert category.status_code == 201, category.text
+
+    task = client.post(
+        "/tasks",
+        headers=headers,
+        json={
+            "title": "Tugas tetap ada",
+            "category_id": category.json()["id"],
+        },
+    )
+    assert task.status_code == 201, task.text
+    task_id = task.json()["id"]
+
+    deleted = client.delete(
+        f"/categories/{category.json()['id']}",
+        headers=headers,
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    task_after_delete = client.get(f"/tasks/{task_id}", headers=headers)
+    assert task_after_delete.status_code == 200, task_after_delete.text
+    assert task_after_delete.json()["title"] == "Tugas tetap ada"
+    assert task_after_delete.json()["category_id"] is None

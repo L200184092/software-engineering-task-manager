@@ -43,6 +43,19 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
             """
         )
 
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE (user_id, name)
+            )
+            """
+        )
+
         columns = {
             row["name"]
             for row in connection.execute("PRAGMA table_info(tasks)").fetchall()
@@ -64,5 +77,14 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
                 """
                 ALTER TABLE tasks
                 ADD COLUMN user_id INTEGER REFERENCES users(id)
+                """
+            )
+
+        if "category_id" not in columns:
+            connection.execute(
+                """
+                ALTER TABLE tasks
+                ADD COLUMN category_id INTEGER
+                REFERENCES categories(id) ON DELETE SET NULL
                 """
             )
