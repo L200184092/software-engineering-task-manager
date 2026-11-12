@@ -1391,6 +1391,41 @@ def test_task_dashboard_limits_and_sorts_task_lists(client):
     ]
 
 
+def test_task_dashboard_includes_deadline_lists_and_priority_distribution(client):
+    headers = register_and_login(
+        client, "dashboard_details_user", "dashboarddetails@example.com"
+    )
+    today = datetime.now().date()
+
+    tasks = [
+        ("Terlambat", "High", (today - timedelta(days=2)).isoformat()),
+        ("Hari ini", "Medium", today.isoformat()),
+        ("Minggu ini", "Low", (today + timedelta(days=4)).isoformat()),
+        ("Minggu depan", "High", (today + timedelta(days=8)).isoformat()),
+        ("Tanpa deadline", "Low", None),
+    ]
+
+    for title, priority, due_date in tasks:
+        response = client.post(
+            "/tasks",
+            headers=headers,
+            json={"title": title, "priority": priority, "due_date": due_date},
+        )
+        assert response.status_code == 201, response.text
+
+    response = client.get("/tasks/dashboard", headers=headers)
+    assert response.status_code == 200, response.text
+    data = response.json()
+
+    assert data["priority_distribution"] == {"low": 2, "medium": 1, "high": 2}
+    assert [task["title"] for task in data["overdue_tasks"]] == ["Terlambat"]
+    assert [task["title"] for task in data["due_today_tasks"]] == ["Hari ini"]
+    assert [task["title"] for task in data["due_this_week_tasks"]] == [
+        "Hari ini",
+        "Minggu ini",
+    ]
+
+
 def test_task_dashboard_preserves_user_isolation(client):
     user_one = register_and_login(
         client, "dashboard_user_one", "dashboard1@example.com"

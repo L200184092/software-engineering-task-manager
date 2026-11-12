@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import ClassVar
 
@@ -354,6 +354,12 @@ class TaskService:
             status = self.get_deadline_status(task, today=today)
             deadline_overview[status_mapping[status]] += 1
 
+        priority_distribution = {
+            "low": sum(1 for task in tasks if task.priority == "Low"),
+            "medium": sum(1 for task in tasks if task.priority == "Medium"),
+            "high": sum(1 for task in tasks if task.priority == "High"),
+        }
+
         priority_tasks = sorted(
             [task for task in tasks if not task.completed and task.priority == "High"],
             key=lambda task: (
@@ -362,6 +368,38 @@ class TaskService:
                 task.id or 0,
             ),
         )[:5]
+
+        overdue_tasks = sorted(
+            [
+                task
+                for task in tasks
+                if not task.completed
+                and task.due_date is not None
+                and task.due_date < today.isoformat()
+            ],
+            key=lambda task: (task.due_date, task.id or 0),
+        )[:5]
+
+        due_today_tasks = sorted(
+            [
+                task
+                for task in tasks
+                if not task.completed and task.due_date == today.isoformat()
+            ],
+            key=lambda task: (task.due_date, task.id or 0),
+        )[:5]
+
+        week_end = (today + timedelta(days=6)).isoformat()
+        due_this_week_tasks = sorted(
+            [
+                task
+                for task in tasks
+                if not task.completed
+                and task.due_date is not None
+                and today.isoformat() <= task.due_date <= week_end
+            ],
+            key=lambda task: (task.due_date, task.id or 0),
+        )[:10]
 
         upcoming_deadlines = sorted(
             [
@@ -404,8 +442,14 @@ class TaskService:
                 ),
             },
             "deadline_overview": deadline_overview,
+            "priority_distribution": priority_distribution,
             "category_distribution": self._get_category_distribution(user_id, tasks),
             "priority_tasks": [serialize_task(task) for task in priority_tasks],
+            "overdue_tasks": [serialize_task(task) for task in overdue_tasks],
+            "due_today_tasks": [serialize_task(task) for task in due_today_tasks],
+            "due_this_week_tasks": [
+                serialize_task(task) for task in due_this_week_tasks
+            ],
             "upcoming_deadlines": [serialize_task(task) for task in upcoming_deadlines],
         }
 
