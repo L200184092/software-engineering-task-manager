@@ -1836,3 +1836,86 @@ def test_list_tasks_category_filter_preserves_user_isolation(client):
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_manual_task_recurrence_endpoint(client):
+    headers = register_and_login(client, "recurrence_user", "recurrence@example.com")
+    created = client.post(
+        "/tasks",
+        headers=headers,
+        json={
+            "title": "Laporan bulanan",
+            "description": "Siapkan laporan",
+            "priority": "High",
+            "due_date": "2026-01-31",
+            "recurrence": "monthly",
+        },
+    )
+    assert created.status_code == 201, created.text
+    task = created.json()
+    assert task["recurrence"] == "monthly"
+    assert task["next_occurrence_created"] is False
+
+    # The next occurrence cannot be created until the current task is complete.
+    premature = client.post(
+        f"/tasks/{task['id']}/next-occurrence",
+        headers=headers,
+    )
+    assert premature.status_code == 422
+
+    completed = client.patch(
+        f"/tasks/{task['id']}/complete",
+        headers=headers,
+    )
+    assert completed.status_code == 200
+
+    next_response = client.post(
+        f"/tasks/{task['id']}/next-occurrence",
+        headers=headers,
+    )
+    assert next_response.status_code == 201, next_response.text
+    next_task = next_response.json()
+    assert next_task["title"] == "Laporan bulanan"
+    assert next_task["description"] == "Siapkan laporan"
+    assert next_task["priority"] == "High"
+    assert next_task["due_date"] == "2026-02-28"
+    assert next_task["completed"] is False
+    assert next_task["recurrence"] == "monthly"
+
+    duplicate = client.post(
+        f"/tasks/{task['id']}/next-occurrence",
+        headers=headers,
+    )
+    assert duplicate.status_code == 422
+
+
+def test_manual_recurrence_rejects_missing_due_date(client):
+    headers = register_and_login(client, "recurrence_user", "recurrence@example.com")
+    response = client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "No deadline", "recurrence": "weekly"},
+    )
+    assert response.status_code == 422
+
+
+def test_manual_recurrence_is_user_scoped(client):
+    headers_one = register_and_login(client, "owner_one", "owner_one@example.com")
+    headers_two = register_and_login(client, "owner_two", "owner_two@example.com")
+    created = client.post(
+        "/tasks",
+        headers=headers_one,
+        json={
+            "title": "Private recurring task",
+            "due_date": "2026-11-12",
+            "recurrence": "daily",
+        },
+    )
+    task_id = created.json()["id"]
+    client.patch(f"/tasks/{task_id}/complete", headers=headers_one)
+
+    response = client.post(
+        f"/tasks/{task_id}/next-occurrence",
+        headers=headers_two,
+    )
+    assert response.status_code == 422 or response.status_code == 404

@@ -1,3 +1,4 @@
+import calendar
 from datetime import date, timedelta
 from pathlib import Path
 from typing import ClassVar
@@ -14,6 +15,13 @@ class TaskService:
     """Menangani logika bisnis dan validasi tugas."""
 
     VALID_PRIORITIES: ClassVar[set[str]] = {"Low", "Medium", "High"}
+    VALID_RECURRENCES: ClassVar[set[str]] = {
+        "none",
+        "daily",
+        "weekly",
+        "monthly",
+        "yearly",
+    }
 
     def __init__(
         self,
@@ -44,6 +52,36 @@ class TaskService:
             raise ValueError("Tanggal tenggat harus menggunakan format YYYY-MM-DD.")
 
         return due_date
+
+    @classmethod
+    def validate_recurrence(cls, recurrence: str) -> str:
+        """Validate a recurrence interval."""
+        if recurrence not in cls.VALID_RECURRENCES:
+            raise ValueError(
+                "Pengulangan harus none, daily, weekly, monthly, atau yearly."
+            )
+        return recurrence
+
+    @staticmethod
+    def calculate_next_due_date(due_date: str, recurrence: str) -> str:
+        """Calculate the next due date without creating a task."""
+        current = date.fromisoformat(due_date)
+        if recurrence == "daily":
+            next_date = current + timedelta(days=1)
+        elif recurrence == "weekly":
+            next_date = current + timedelta(weeks=1)
+        elif recurrence == "monthly":
+            year = current.year + (current.month // 12)
+            month = current.month % 12 + 1
+            day = min(current.day, calendar.monthrange(year, month)[1])
+            next_date = date(year, month, day)
+        elif recurrence == "yearly":
+            year = current.year + 1
+            day = min(current.day, calendar.monthrange(year, current.month)[1])
+            next_date = date(year, current.month, day)
+        else:
+            raise ValueError("Tugas ini tidak memiliki pengaturan pengulangan.")
+        return next_date.isoformat()
 
     @staticmethod
     def get_deadline_status(
@@ -86,12 +124,16 @@ class TaskService:
         description: str = "",
         priority: str = "Medium",
         due_date: str | None = None,
+        recurrence: str = "none",
     ) -> Task:
         """Membuat tugas baru setelah memvalidasi input."""
         title = title.strip()
         description = description.strip()
         priority = self.validate_priority(priority)
         due_date = self.validate_due_date(due_date)
+        recurrence = self.validate_recurrence(recurrence)
+        if recurrence != "none" and due_date is None:
+            raise ValueError("Tugas berulang harus memiliki tanggal tenggat.")
 
         if not title:
             raise ValueError("Judul tugas tidak boleh kosong.")
@@ -102,6 +144,7 @@ class TaskService:
                 description=description,
                 priority=priority,
                 due_date=due_date,
+                recurrence=recurrence,
             )
         )
 
@@ -214,6 +257,30 @@ class TaskService:
 
         task.completed = True
         return self.repository.update(task)
+
+    def create_next_occurrence(self, task_id: int, user_id: int) -> Task:
+        """Manually create the next occurrence after the current task is completed."""
+        task = self.repository.get_for_user(task_id, user_id)
+        if task is None:
+            raise ValueError("Tugas tidak ditemukan.")
+        if not task.completed:
+            raise ValueError(
+                "Tugas harus diselesaikan sebelum membuat pengulangan berikutnya."
+            )
+        if task.recurrence == "none":
+            raise ValueError("Tugas ini tidak memiliki pengaturan pengulangan.")
+        if task.due_date is None:
+            raise ValueError("Tugas berulang harus memiliki tanggal tenggat.")
+        if task.next_occurrence_created:
+            raise ValueError("Pengulangan berikutnya untuk tugas ini sudah dibuat.")
+
+        next_due_date = self.calculate_next_due_date(task.due_date, task.recurrence)
+        created = self.repository.create_next_occurrence_for_user(
+            task_id, user_id, next_due_date
+        )
+        if created is None:
+            raise ValueError("Pengulangan berikutnya tidak dapat dibuat.")
+        return created
 
     def delete_task(self, task_id: int) -> bool:
         """Menghapus tugas berdasarkan ID."""

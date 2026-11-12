@@ -21,14 +21,16 @@ class TaskRepository:
             priority=row["priority"],
             due_date=row["due_date"],
             category_id=row["category_id"],
+            recurrence=row["recurrence"],
+            next_occurrence_created=bool(row["next_occurrence_created"]),
         )
 
     # Metode lama dipertahankan untuk CLI dan fitur lokal.
     def create(self, task: Task) -> Task:
         with get_connection(self.db_path) as connection:
             cursor = connection.execute(
-                """INSERT INTO tasks (title, description, completed, priority, due_date, category_id)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO tasks (title, description, completed, priority, due_date, category_id, recurrence, next_occurrence_created)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     task.title,
                     task.description,
@@ -36,6 +38,8 @@ class TaskRepository:
                     task.priority,
                     task.due_date,
                     task.category_id,
+                    task.recurrence,
+                    int(task.next_occurrence_created),
                 ),
             )
             task_id = cursor.lastrowid
@@ -47,12 +51,14 @@ class TaskRepository:
             priority=task.priority,
             due_date=task.due_date,
             category_id=task.category_id,
+            recurrence=task.recurrence,
+            next_occurrence_created=task.next_occurrence_created,
         )
 
     def get_all(self) -> list[Task]:
         with get_connection(self.db_path) as connection:
             rows = connection.execute(
-                """SELECT id, title, description, completed, priority, due_date, category_id
+                """SELECT id, title, description, completed, priority, due_date, category_id, recurrence, next_occurrence_created
                    FROM tasks ORDER BY id"""
             ).fetchall()
         return [self._task(row) for row in rows]
@@ -62,7 +68,7 @@ class TaskRepository:
             return False
         with get_connection(self.db_path) as connection:
             cursor = connection.execute(
-                """UPDATE tasks SET title=?, description=?, completed=?, priority=?, due_date=?, category_id=?
+                """UPDATE tasks SET title=?, description=?, completed=?, priority=?, due_date=?, category_id=?, recurrence=?, next_occurrence_created=?
                    WHERE id=?""",
                 (
                     task.title,
@@ -71,6 +77,8 @@ class TaskRepository:
                     task.priority,
                     task.due_date,
                     task.category_id,
+                    task.recurrence,
+                    int(task.next_occurrence_created),
                     task.id,
                 ),
             )
@@ -85,8 +93,8 @@ class TaskRepository:
     def create_for_user(self, task: Task, user_id: int) -> Task:
         with get_connection(self.db_path) as connection:
             cursor = connection.execute(
-                """INSERT INTO tasks (title, description, completed, priority, due_date, category_id, user_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO tasks (title, description, completed, priority, due_date, category_id, recurrence, next_occurrence_created, user_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     task.title,
                     task.description,
@@ -94,12 +102,14 @@ class TaskRepository:
                     task.priority,
                     task.due_date,
                     task.category_id,
+                    task.recurrence,
+                    int(task.next_occurrence_created),
                     user_id,
                 ),
             )
             task_id = cursor.lastrowid
             row = connection.execute(
-                """SELECT id, title, description, completed, priority, due_date, category_id
+                """SELECT id, title, description, completed, priority, due_date, category_id, recurrence, next_occurrence_created
                    FROM tasks WHERE id=? AND user_id=?""",
                 (task_id, user_id),
             ).fetchone()
@@ -137,7 +147,7 @@ class TaskRepository:
             raise ValueError("Arah pengurutan harus 'asc' atau 'desc'.")
 
         query = """
-            SELECT id, title, description, completed, priority, due_date, category_id
+            SELECT id, title, description, completed, priority, due_date, category_id, recurrence, next_occurrence_created
             FROM tasks
             WHERE user_id = ?
         """
@@ -199,7 +209,7 @@ class TaskRepository:
     def get_for_user(self, task_id: int, user_id: int) -> Task | None:
         with get_connection(self.db_path) as connection:
             row = connection.execute(
-                """SELECT id, title, description, completed, priority, due_date, category_id
+                """SELECT id, title, description, completed, priority, due_date, category_id, recurrence, next_occurrence_created
                    FROM tasks WHERE id=? AND user_id=?""",
                 (task_id, user_id),
             ).fetchone()
@@ -215,12 +225,22 @@ class TaskRepository:
         priority: str,
         due_date: str | None,
         category_id: int | None = None,
+        recurrence: str = "none",
     ) -> bool:
         with get_connection(self.db_path) as connection:
             cursor = connection.execute(
-                """UPDATE tasks SET title=?, description=?, priority=?, due_date=?, category_id=?
+                """UPDATE tasks SET title=?, description=?, priority=?, due_date=?, category_id=?, recurrence=?
                    WHERE id=? AND user_id=?""",
-                (title, description, priority, due_date, category_id, task_id, user_id),
+                (
+                    title,
+                    description,
+                    priority,
+                    due_date,
+                    category_id,
+                    recurrence,
+                    task_id,
+                    user_id,
+                ),
             )
         return cursor.rowcount > 0
 
@@ -231,7 +251,14 @@ class TaskRepository:
         fields: dict,
     ) -> bool:
         """Memperbarui field tertentu dari tugas milik pengguna."""
-        allowed_fields = {"title", "description", "priority", "due_date", "category_id"}
+        allowed_fields = {
+            "title",
+            "description",
+            "priority",
+            "due_date",
+            "category_id",
+            "recurrence",
+        }
         if not fields or not fields.keys() <= allowed_fields:
             return False
 
@@ -267,7 +294,7 @@ class TaskRepository:
         with get_connection(self.db_path) as connection:
             rows = connection.execute(
                 """
-                SELECT id, title, description, completed, priority, due_date, category_id
+                SELECT id, title, description, completed, priority, due_date, category_id, recurrence, next_occurrence_created
                 FROM tasks
                 WHERE user_id = ?
                 """,
@@ -275,3 +302,64 @@ class TaskRepository:
             ).fetchall()
 
         return [self._task(row) for row in rows]
+
+    def create_next_occurrence_for_user(
+        self, task_id: int, user_id: int, next_due_date: str
+    ) -> Task | None:
+        """Create one next occurrence manually, atomically, for the task owner."""
+        with get_connection(self.db_path) as connection:
+            claimed = connection.execute(
+                """
+                UPDATE tasks
+                SET next_occurrence_created = 1
+                WHERE id = ?
+                  AND user_id = ?
+                  AND completed = 1
+                  AND recurrence != 'none'
+                  AND due_date IS NOT NULL
+                  AND next_occurrence_created = 0
+                """,
+                (task_id, user_id),
+            )
+            if claimed.rowcount != 1:
+                return None
+
+            row = connection.execute(
+                """
+                SELECT id, title, description, completed, priority, due_date,
+                       category_id, recurrence, next_occurrence_created
+                FROM tasks
+                WHERE id = ? AND user_id = ?
+                """,
+                (task_id, user_id),
+            ).fetchone()
+
+            cursor = connection.execute(
+                """
+                INSERT INTO tasks (
+                    title, description, completed, priority, due_date,
+                    category_id, recurrence, next_occurrence_created, user_id
+                )
+                VALUES (?, ?, 0, ?, ?, ?, ?, 0, ?)
+                """,
+                (
+                    row["title"],
+                    row["description"],
+                    row["priority"],
+                    next_due_date,
+                    row["category_id"],
+                    row["recurrence"],
+                    user_id,
+                ),
+            )
+            new_id = cursor.lastrowid
+            new_row = connection.execute(
+                """
+                SELECT id, title, description, completed, priority, due_date,
+                       category_id, recurrence, next_occurrence_created
+                FROM tasks WHERE id = ? AND user_id = ?
+                """,
+                (new_id, user_id),
+            ).fetchone()
+
+        return self._task(new_row)

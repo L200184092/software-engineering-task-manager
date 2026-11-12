@@ -82,6 +82,7 @@ class TaskCreate(BaseModel):
     priority: str = "Medium"
     due_date: str | None = None
     category_id: int | None = Field(default=None, ge=1)
+    recurrence: str = "none"
 
 
 class TaskUpdate(BaseModel):
@@ -92,6 +93,7 @@ class TaskUpdate(BaseModel):
     priority: str
     due_date: str | None
     category_id: int | None = Field(default=None, ge=1)
+    recurrence: str = "none"
 
 
 class TaskPatch(BaseModel):
@@ -104,6 +106,7 @@ class TaskPatch(BaseModel):
     priority: str | None = None
     due_date: str | None = None
     category_id: int | None = Field(default=None, ge=1)
+    recurrence: str | None = None
 
 
 class CategoryCreate(BaseModel):
@@ -128,6 +131,8 @@ class TaskResponse(BaseModel):
     priority: str
     due_date: str | None
     category_id: int | None
+    recurrence: str
+    next_occurrence_created: bool
     deadline_status: str
 
 
@@ -140,6 +145,8 @@ def to_task_response(task: Task, service: TaskService) -> TaskResponse:
         priority=task.priority,
         due_date=task.due_date,
         category_id=task.category_id,
+        recurrence=task.recurrence,
+        next_occurrence_created=task.next_occurrence_created,
         deadline_status=service.get_deadline_status(task),
     )
 
@@ -419,6 +426,9 @@ def create_task(
             raise ValueError("Judul tugas tidak boleh kosong.")
         priority = service.validate_priority(payload.priority)
         due_date = service.validate_due_date(payload.due_date)
+        recurrence = service.validate_recurrence(payload.recurrence)
+        if recurrence != "none" and due_date is None:
+            raise ValueError("Tugas berulang harus memiliki tanggal tenggat.")
         if payload.category_id is not None:
             category = category_service.get_category(payload.category_id, user.id)
             if category is None:
@@ -430,6 +440,7 @@ def create_task(
                 priority=priority,
                 due_date=due_date,
                 category_id=payload.category_id,
+                recurrence=recurrence,
             ),
             user.id,
         )
@@ -467,6 +478,9 @@ def update_task(
             raise ValueError("Judul tugas tidak boleh kosong.")
         priority = service.validate_priority(payload.priority or "Medium")
         due_date = service.validate_due_date(payload.due_date)
+        recurrence = service.validate_recurrence(payload.recurrence)
+        if recurrence != "none" and due_date is None:
+            raise ValueError("Tugas berulang harus memiliki tanggal tenggat.")
         if payload.category_id is not None:
             category = category_service.get_category(payload.category_id, user.id)
             if category is None:
@@ -479,6 +493,7 @@ def update_task(
             priority=priority,
             due_date=due_date,
             category_id=payload.category_id,
+            recurrence=recurrence,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -528,6 +543,18 @@ def patch_task(
         if "due_date" in fields:
             fields["due_date"] = service.validate_due_date(fields["due_date"])
 
+        if "recurrence" in fields:
+            if fields["recurrence"] is None:
+                raise ValueError("Pengaturan pengulangan tidak boleh null.")
+            fields["recurrence"] = service.validate_recurrence(fields["recurrence"])
+
+        current_task = service.repository.get_for_user(task_id, user.id)
+        if current_task is not None:
+            effective_recurrence = fields.get("recurrence", current_task.recurrence)
+            effective_due_date = fields.get("due_date", current_task.due_date)
+            if effective_recurrence != "none" and effective_due_date is None:
+                raise ValueError("Tugas berulang harus memiliki tanggal tenggat.")
+
         if "category_id" in fields and fields["category_id"] is not None:
             category = category_service.get_category(fields["category_id"], user.id)
             if category is None:
@@ -564,6 +591,26 @@ def complete_task(
     if not service.repository.complete_for_user(task_id, user.id):
         raise HTTPException(status_code=404, detail="Task not found")
     task = service.repository.get_for_user(task_id, user.id)
+    return to_task_response(task, service)
+
+
+@app.post(
+    "/tasks/{task_id}/next-occurrence",
+    response_model=TaskResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_next_task_occurrence(
+    task_id: int,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    """Create the next recurring task only when explicitly requested."""
+    try:
+        task = service.create_next_occurrence(task_id, user.id)
+    except ValueError as exc:
+        message = str(exc)
+        code = 404 if message == "Tugas tidak ditemukan." else 422
+        raise HTTPException(status_code=code, detail=message) from exc
     return to_task_response(task, service)
 
 

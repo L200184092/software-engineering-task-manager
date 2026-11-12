@@ -12,6 +12,8 @@ class Task:
     priority: str = "Medium"
     due_date: str | None = None
     category_id: int | None = None
+    recurrence: str = "none"
+    next_occurrence_created: bool = False
 
 
 @dataclass

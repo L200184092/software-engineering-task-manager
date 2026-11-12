@@ -88,3 +88,13 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
                 REFERENCES categories(id) ON DELETE SET NULL
                 """
             )
+
+        if "recurrence" not in columns:
+            connection.execute(
+                "ALTER TABLE tasks ADD COLUMN recurrence TEXT NOT NULL DEFAULT 'none'"
+            )
+
+        if "next_occurrence_created" not in columns:
+            connection.execute(
+                "ALTER TABLE tasks ADD COLUMN next_occurrence_created INTEGER NOT NULL DEFAULT 0"
+            )

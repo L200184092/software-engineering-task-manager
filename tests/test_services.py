@@ -511,3 +511,83 @@ def test_deadline_status_completed_takes_precedence(tmp_path):
     )
 
     assert status == "Completed"
+
+
+@pytest.mark.parametrize(
+    ("due_date", "recurrence", "expected"),
+    [
+        ("2026-11-12", "daily", "2026-11-13"),
+        ("2026-11-12", "weekly", "2026-11-19"),
+        ("2026-01-31", "monthly", "2026-02-28"),
+        ("2024-02-29", "yearly", "2025-02-28"),
+    ],
+)
+def test_calculate_next_due_date(due_date, recurrence, expected):
+    assert TaskService.calculate_next_due_date(due_date, recurrence) == expected
+
+
+def test_create_task_with_recurrence_requires_due_date(tmp_path):
+    service = create_test_service(tmp_path)
+
+    with pytest.raises(ValueError, match="harus memiliki tanggal tenggat"):
+        service.create_task("Tugas berulang", recurrence="daily")
+
+
+def test_create_next_occurrence_manually(tmp_path):
+    service = create_test_service(tmp_path)
+    # Create a user-scoped task because manual occurrence creation is owner-scoped.
+    from src.task_manager.models import Task, User
+    from src.task_manager.user_repository import UserRepository
+
+    users = UserRepository(service.repository.db_path)
+    user = users.create(
+        User(
+            username="recurrence_user",
+            email="recurrence@example.com",
+            password_hash="test-hash",
+        )
+    )
+    task = service.repository.create_for_user(
+        Task(
+            title="Laporan bulanan",
+            description="Siapkan laporan",
+            priority="High",
+            due_date="2026-01-31",
+            recurrence="monthly",
+        ),
+        user.id,
+    )
+    service.repository.complete_for_user(task.id, user.id)
+
+    next_task = service.create_next_occurrence(task.id, user.id)
+
+    assert next_task.title == task.title
+    assert next_task.description == task.description
+    assert next_task.priority == "High"
+    assert next_task.due_date == "2026-02-28"
+    assert next_task.completed is False
+    assert next_task.recurrence == "monthly"
+
+
+def test_create_next_occurrence_rejects_duplicate(tmp_path):
+    service = create_test_service(tmp_path)
+    from src.task_manager.models import Task, User
+    from src.task_manager.user_repository import UserRepository
+
+    users = UserRepository(service.repository.db_path)
+    user = users.create(
+        User(
+            username="recurrence_user",
+            email="recurrence@example.com",
+            password_hash="test",
+        )
+    )
+    task = service.repository.create_for_user(
+        Task(title="Tugas harian", due_date="2026-11-12", recurrence="daily"),
+        user.id,
+    )
+    service.repository.complete_for_user(task.id, user.id)
+    service.create_next_occurrence(task.id, user.id)
+
+    with pytest.raises(ValueError, match="sudah dibuat"):
+        service.create_next_occurrence(task.id, user.id)
