@@ -1720,3 +1720,84 @@ def test_deleting_category_keeps_tasks_and_clears_category_id(client):
     assert task_after_delete.status_code == 200, task_after_delete.text
     assert task_after_delete.json()["title"] == "Tugas tetap ada"
     assert task_after_delete.json()["category_id"] is None
+
+
+def test_list_tasks_filters_by_category(client):
+    headers = register_and_login(
+        client, "filter_category_user", "filtercategory@example.com"
+    )
+
+    work = client.post("/categories", headers=headers, json={"name": "Work"})
+    personal = client.post("/categories", headers=headers, json={"name": "Personal"})
+
+    assert work.status_code == 201
+    assert personal.status_code == 201
+
+    work_task = client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Menyelesaikan proyek", "category_id": work.json()["id"]},
+    )
+    client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Belanja kebutuhan", "category_id": personal.json()["id"]},
+    )
+
+    response = client.get(f"/tasks?category_id={work.json()['id']}", headers=headers)
+
+    assert response.status_code == 200
+    assert [task["id"] for task in response.json()] == [work_task.json()["id"]]
+
+
+def test_list_tasks_filters_uncategorized_tasks(client):
+    headers = register_and_login(
+        client, "filter_uncategorized_user", "filteruncategorized@example.com"
+    )
+
+    category = client.post("/categories", headers=headers, json={"name": "Work"})
+    assert category.status_code == 201
+
+    categorized = client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Tugas berkategori", "category_id": category.json()["id"]},
+    )
+    uncategorized = client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Tugas tanpa kategori"},
+    )
+
+    assert categorized.status_code == 201
+    assert uncategorized.status_code == 201
+
+    response = client.get("/tasks?category_id=uncategorized", headers=headers)
+
+    assert response.status_code == 200
+    assert [task["id"] for task in response.json()] == [uncategorized.json()["id"]]
+
+
+def test_list_tasks_category_filter_preserves_user_isolation(client):
+    user_one = register_and_login(
+        client, "category_filter_one", "categoryfilter1@example.com"
+    )
+    user_two = register_and_login(
+        client, "category_filter_two", "categoryfilter2@example.com"
+    )
+
+    category = client.post("/categories", headers=user_one, json={"name": "Private"})
+    assert category.status_code == 201
+
+    client.post(
+        "/tasks",
+        headers=user_one,
+        json={"title": "Tugas pribadi", "category_id": category.json()["id"]},
+    )
+
+    response = client.get(
+        f"/tasks?category_id={category.json()['id']}", headers=user_two
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []

@@ -304,6 +304,7 @@ def list_tasks(
     sort_order: str = Query(default="asc"),
     due_from: str | None = Query(default=None),
     due_to: str | None = Query(default=None),
+    category_id: str | None = Query(default=None),
     user: User = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
 ):
@@ -329,6 +330,25 @@ def list_tasks(
             priority = service.validate_priority(priority)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if category_id is not None:
+        if category_id == "uncategorized":
+            category_filter = "uncategorized"
+        else:
+            try:
+                category_filter = int(category_id)
+                if category_filter < 1:
+                    raise ValueError
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "category_id harus berupa ID kategori positif "
+                        "atau 'uncategorized'."
+                    ),
+                ) from exc
+    else:
+        category_filter = None
 
     allowed_sort_fields = {
         "id",
@@ -363,6 +383,7 @@ def list_tasks(
         sort_order=sort_order,
         due_from=due_from,
         due_to=due_to,
+        category_id=category_filter,
     )
 
     return [to_task_response(task, service) for task in tasks]

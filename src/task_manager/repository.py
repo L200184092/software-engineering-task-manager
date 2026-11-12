@@ -117,6 +117,7 @@ class TaskRepository:
         sort_order: str = "asc",
         due_from: str | None = None,
         due_to: str | None = None,
+        category_id: int | str | None = None,
     ) -> list[Task]:
         """Mengambil tugas milik pengguna dengan pencarian, filter,
         pagination, dan sorting.
@@ -161,6 +162,12 @@ class TaskRepository:
         if due_to is not None:
             query += " AND due_date <= ?"
             params.append(due_to)
+
+        if category_id == "uncategorized":
+            query += " AND category_id IS NULL"
+        elif category_id is not None:
+            query += " AND category_id = ?"
+            params.append(category_id)
 
         if sort_by == "priority":
             query += """
