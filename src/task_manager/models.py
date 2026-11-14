@@ -75,3 +75,17 @@ class Tag:
     name: str
     user_id: int
     id: int | None = None
+
+
+@dataclass
+class TaskAttachment:
+    """Metadata file yang dilampirkan pada sebuah task."""
+
+    task_id: int
+    user_id: int
+    original_filename: str
+    storage_filename: str
+    content_type: str
+    file_size: int
+    id: int | None = None
+    created_at: str | None = None

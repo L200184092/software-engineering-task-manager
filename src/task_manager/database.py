@@ -176,3 +176,24 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_task_tags_user_tag ON task_tags(user_id, tag_id)"
         )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS task_attachments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                original_filename TEXT NOT NULL,
+                storage_filename TEXT NOT NULL UNIQUE,
+                content_type TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_task_attachments_task_user "
+            "ON task_attachments(task_id, user_id, id)"
+        )

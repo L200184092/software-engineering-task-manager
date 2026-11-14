@@ -1,7 +1,21 @@
+import io
 import sqlite3
+import uuid
+import zipfile
+from pathlib import Path
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -9,6 +23,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from .activity_repository import ActivityRepository
+from .attachment_repository import AttachmentRepository
 from .auth import (
     create_access_token,
     decode_access_token,
@@ -172,6 +187,15 @@ class TagResponse(BaseModel):
 
 class TaskTagsUpdate(BaseModel):
     tag_ids: list[int] = Field(default_factory=list, max_length=50)
+
+
+class AttachmentResponse(BaseModel):
+    id: int
+    task_id: int
+    filename: str
+    content_type: str
+    size: int
+    created_at: str
 
 
 class TaskResponse(BaseModel):
@@ -898,6 +922,176 @@ def delete_subtask(
         raise HTTPException(status_code=404, detail="Subtask not found")
 
 
+MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024
+ALLOWED_ATTACHMENT_TYPES = {
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+}
+
+
+def validate_attachment_content(filename: str, content: bytes) -> tuple[str, str]:
+    """Validate extension and basic file signature; never trust client MIME."""
+    extension = Path(filename).suffix.lower()
+    content_type = ALLOWED_ATTACHMENT_TYPES.get(extension)
+    if content_type is None:
+        raise HTTPException(status_code=415, detail="Tipe file tidak didukung.")
+
+    valid = False
+    if extension == ".pdf":
+        valid = content.startswith(b"%PDF-")
+    elif extension == ".png":
+        valid = content.startswith(b"\x89PNG\r\n\x1a\n")
+    elif extension in {".jpg", ".jpeg"}:
+        valid = content.startswith(b"\xff\xd8\xff")
+    elif extension in {".docx", ".xlsx"}:
+        try:
+            with zipfile.ZipFile(io.BytesIO(content)) as archive:
+                entries = set(archive.namelist())
+            required_entry = (
+                "word/document.xml" if extension == ".docx" else "xl/workbook.xml"
+            )
+            valid = "[Content_Types].xml" in entries and required_entry in entries
+        except (zipfile.BadZipFile, OSError):
+            valid = False
+
+    if not valid:
+        raise HTTPException(
+            status_code=415, detail="Isi file tidak sesuai dengan ekstensinya."
+        )
+    return extension, content_type
+
+
+def attachment_response(attachment) -> AttachmentResponse:
+    return AttachmentResponse(
+        id=attachment.id,
+        task_id=attachment.task_id,
+        filename=attachment.original_filename,
+        content_type=attachment.content_type,
+        size=attachment.file_size,
+        created_at=attachment.created_at,
+    )
+
+
+@app.get(
+    "/tasks/{task_id}/attachments",
+    response_model=list[AttachmentResponse],
+)
+def list_task_attachments(
+    task_id: int,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    repo = AttachmentRepository(service.repository.db_path)
+    attachments = repo.list_for_task(task_id, user.id)
+    if attachments is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return [attachment_response(item) for item in attachments]
+
+
+@app.post(
+    "/tasks/{task_id}/attachments",
+    response_model=AttachmentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_task_attachment(
+    task_id: int,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    repo = AttachmentRepository(service.repository.db_path)
+    if service.repository.get_for_user(task_id, user.id) is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    original_filename = (
+        (file.filename or "").replace("\\\\", "/").split("/")[-1].strip()
+    )
+    if any(
+        ord(character) < 32 or ord(character) == 127 for character in original_filename
+    ):
+        raise HTTPException(status_code=422, detail="Nama file tidak valid.")
+    if not original_filename or len(original_filename) > 255:
+        raise HTTPException(status_code=422, detail="Nama file tidak valid.")
+
+    content = await file.read(MAX_ATTACHMENT_SIZE + 1)
+    await file.close()
+    if not content:
+        raise HTTPException(status_code=422, detail="File tidak boleh kosong.")
+    if len(content) > MAX_ATTACHMENT_SIZE:
+        raise HTTPException(status_code=413, detail="Ukuran file maksimal 5 MB.")
+
+    extension, content_type = validate_attachment_content(original_filename, content)
+    storage_filename = f"{uuid.uuid4().hex}{extension}"
+    repo.storage_dir.mkdir(parents=True, exist_ok=True)
+    storage_path = repo.storage_dir / storage_filename
+    storage_path.write_bytes(content)
+
+    try:
+        attachment = repo.create(
+            task_id=task_id,
+            user_id=user.id,
+            original_filename=original_filename,
+            storage_filename=storage_filename,
+            content_type=content_type,
+            file_size=len(content),
+        )
+    except Exception:
+        storage_path.unlink(missing_ok=True)
+        raise
+
+    ActivityRepository(service.repository.db_path).record(
+        task_id, user.id, "attachment_uploaded", original_filename
+    )
+    return attachment_response(attachment)
+
+
+@app.get("/tasks/{task_id}/attachments/{attachment_id}/download")
+def download_task_attachment(
+    task_id: int,
+    attachment_id: int,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    repo = AttachmentRepository(service.repository.db_path)
+    attachment = repo.get_for_task(attachment_id, task_id, user.id)
+    if attachment is None:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    path = repo.storage_dir / attachment.storage_filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="File attachment tidak ditemukan.")
+    return FileResponse(
+        path,
+        media_type=attachment.content_type,
+        filename=attachment.original_filename,
+    )
+
+
+@app.delete(
+    "/tasks/{task_id}/attachments/{attachment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_task_attachment(
+    task_id: int,
+    attachment_id: int,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    repo = AttachmentRepository(service.repository.db_path)
+    attachment = repo.delete_for_task(attachment_id, task_id, user.id)
+    if attachment is None:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    (repo.storage_dir / attachment.storage_filename).unlink(missing_ok=True)
+    ActivityRepository(service.repository.db_path).record(
+        task_id, user.id, "attachment_deleted", attachment.original_filename
+    )
+
+
 @app.get("/tasks/{task_id}/comments", response_model=list[CommentResponse])
 def list_task_comments(
     task_id: int,
@@ -1026,5 +1220,9 @@ def delete_task(
     user: User = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
 ):
+    attachment_repo = AttachmentRepository(service.repository.db_path)
+    storage_names = attachment_repo.list_storage_names_for_task(task_id, user.id)
     if not service.repository.delete_for_user(task_id, user.id):
         raise HTTPException(status_code=404, detail="Task not found")
+    for storage_name in storage_names:
+        (attachment_repo.storage_dir / storage_name).unlink(missing_ok=True)
