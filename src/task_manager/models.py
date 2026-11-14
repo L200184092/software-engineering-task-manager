@@ -33,3 +33,14 @@ class Category:
     name: str
     user_id: int
     id: int | None = None
+
+
+@dataclass
+class Subtask:
+    """Representasi satu subtask yang dimiliki oleh sebuah task."""
+
+    task_id: int
+    user_id: int
+    title: str
+    id: int | None = None
+    completed: bool = False

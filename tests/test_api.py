@@ -1919,3 +1919,84 @@ def test_manual_recurrence_is_user_scoped(client):
         headers=headers_two,
     )
     assert response.status_code == 422 or response.status_code == 404
+
+
+def test_subtask_crud_and_task_progress(client):
+    headers = register_and_login(client, "subtask_user", "subtask@example.com")
+    task = client.post("/tasks", json={"title": "Proyek besar"}, headers=headers).json()
+
+    created = client.post(
+        f"/tasks/{task['id']}/subtasks",
+        json={"title": "Bagian pertama"},
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    subtask = created.json()
+
+    second = client.post(
+        f"/tasks/{task['id']}/subtasks",
+        json={"title": "Bagian kedua"},
+        headers=headers,
+    )
+    assert second.status_code == 201, second.text
+
+    completed = client.patch(
+        f"/tasks/{task['id']}/subtasks/{subtask['id']}/complete",
+        headers=headers,
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["completed"] is True
+
+    updated_task = client.get(f"/tasks/{task['id']}", headers=headers).json()
+    assert updated_task["subtask_total"] == 2
+    assert updated_task["subtask_completed"] == 1
+    assert updated_task["subtask_progress"] == 50.0
+
+    listed = client.get(f"/tasks/{task['id']}/subtasks", headers=headers)
+    assert listed.status_code == 200
+    assert len(listed.json()) == 2
+
+    deleted = client.delete(
+        f"/tasks/{task['id']}/subtasks/{second.json()['id']}", headers=headers
+    )
+    assert deleted.status_code == 204
+
+
+def test_subtask_access_is_user_scoped(client):
+    owner_headers = register_and_login(client, "subtask_owner", "owner_sub@example.com")
+    other_headers = register_and_login(client, "subtask_other", "other_sub@example.com")
+    task = client.post(
+        "/tasks", json={"title": "Task privat"}, headers=owner_headers
+    ).json()
+    subtask = client.post(
+        f"/tasks/{task['id']}/subtasks",
+        json={"title": "Subtask privat"},
+        headers=owner_headers,
+    ).json()
+
+    assert (
+        client.get(f"/tasks/{task['id']}/subtasks", headers=other_headers).status_code
+        == 404
+    )
+    assert (
+        client.patch(
+            f"/tasks/{task['id']}/subtasks/{subtask['id']}/complete",
+            headers=other_headers,
+        ).status_code
+        == 404
+    )
+    assert (
+        client.delete(
+            f"/tasks/{task['id']}/subtasks/{subtask['id']}", headers=other_headers
+        ).status_code
+        == 404
+    )
+
+
+def test_subtask_rejects_blank_title(client):
+    headers = register_and_login(client, "subtask_blank", "blank_sub@example.com")
+    task = client.post("/tasks", json={"title": "Task"}, headers=headers).json()
+    response = client.post(
+        f"/tasks/{task['id']}/subtasks", json={"title": "   "}, headers=headers
+    )
+    assert response.status_code == 422

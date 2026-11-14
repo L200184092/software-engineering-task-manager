@@ -98,3 +98,21 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
             connection.execute(
                 "ALTER TABLE tasks ADD COLUMN next_occurrence_created INTEGER NOT NULL DEFAULT 0"
             )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS subtasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                completed INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_subtasks_task_user ON subtasks(task_id, user_id)"
+        )

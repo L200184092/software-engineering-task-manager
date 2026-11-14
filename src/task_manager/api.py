@@ -20,6 +20,7 @@ from .database import get_connection
 from .models import Task, User
 from .repository import TaskRepository
 from .services import TaskService
+from .subtask_repository import SubtaskRepository
 from .user_repository import UserRepository
 
 app = FastAPI(
@@ -109,6 +110,21 @@ class TaskPatch(BaseModel):
     recurrence: str | None = None
 
 
+class SubtaskCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
+class SubtaskUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
+class SubtaskResponse(BaseModel):
+    id: int
+    task_id: int
+    title: str
+    completed: bool
+
+
 class CategoryCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
 
@@ -134,9 +150,19 @@ class TaskResponse(BaseModel):
     recurrence: str
     next_occurrence_created: bool
     deadline_status: str
+    subtask_total: int = 0
+    subtask_completed: int = 0
+    subtask_progress: float = 0.0
 
 
-def to_task_response(task: Task, service: TaskService) -> TaskResponse:
+def to_task_response(
+    task: Task, service: TaskService, user_id: int | None = None
+) -> TaskResponse:
+    subtask_summary = (
+        SubtaskRepository(service.repository.db_path).get_summary(task.id, user_id)
+        if user_id is not None and task.id is not None
+        else {"subtask_total": 0, "subtask_completed": 0, "subtask_progress": 0.0}
+    )
     return TaskResponse(
         id=task.id,
         title=task.title,
@@ -148,6 +174,7 @@ def to_task_response(task: Task, service: TaskService) -> TaskResponse:
         recurrence=task.recurrence,
         next_occurrence_created=task.next_occurrence_created,
         deadline_status=service.get_deadline_status(task),
+        **subtask_summary,
     )
 
 
@@ -393,7 +420,7 @@ def list_tasks(
         category_id=category_filter,
     )
 
-    return [to_task_response(task, service) for task in tasks]
+    return [to_task_response(task, service, user.id) for task in tasks]
 
 
 @app.get("/tasks/statistics")
@@ -445,7 +472,7 @@ def create_task(
             user.id,
         )
 
-        return to_task_response(task, service)
+        return to_task_response(task, service, user.id)
 
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -460,7 +487,7 @@ def get_task(
     task = service.repository.get_for_user(task_id, user.id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
-    return to_task_response(task, service)
+    return to_task_response(task, service, user.id)
 
 
 @app.put("/tasks/{task_id}", response_model=TaskResponse)
@@ -500,7 +527,7 @@ def update_task(
     if not updated:
         raise HTTPException(status_code=404, detail="Task not found")
     task = service.repository.get_for_user(task_id, user.id)
-    return to_task_response(task, service)
+    return to_task_response(task, service, user.id)
 
 
 @app.patch("/tasks/{task_id}", response_model=TaskResponse)
@@ -579,7 +606,7 @@ def patch_task(
         )
 
     task = service.repository.get_for_user(task_id, user.id)
-    return to_task_response(task, service)
+    return to_task_response(task, service, user.id)
 
 
 @app.patch("/tasks/{task_id}/complete", response_model=TaskResponse)
@@ -591,7 +618,7 @@ def complete_task(
     if not service.repository.complete_for_user(task_id, user.id):
         raise HTTPException(status_code=404, detail="Task not found")
     task = service.repository.get_for_user(task_id, user.id)
-    return to_task_response(task, service)
+    return to_task_response(task, service, user.id)
 
 
 @app.post(
@@ -611,7 +638,116 @@ def create_next_task_occurrence(
         message = str(exc)
         code = 404 if message == "Tugas tidak ditemukan." else 422
         raise HTTPException(status_code=code, detail=message) from exc
-    return to_task_response(task, service)
+    return to_task_response(task, service, user.id)
+
+
+@app.get("/tasks/{task_id}/subtasks", response_model=list[SubtaskResponse])
+def list_subtasks(
+    task_id: int,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    subtasks = SubtaskRepository(service.repository.db_path).list_for_task(
+        task_id, user.id
+    )
+    if subtasks is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return [
+        SubtaskResponse(
+            id=item.id, task_id=item.task_id, title=item.title, completed=item.completed
+        )
+        for item in subtasks
+    ]
+
+
+@app.post(
+    "/tasks/{task_id}/subtasks",
+    response_model=SubtaskResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_subtask(
+    task_id: int,
+    payload: SubtaskCreate,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Judul subtask tidak boleh kosong.")
+    subtask = SubtaskRepository(service.repository.db_path).create_for_task(
+        task_id, user.id, title
+    )
+    if subtask is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return SubtaskResponse(
+        id=subtask.id,
+        task_id=subtask.task_id,
+        title=subtask.title,
+        completed=subtask.completed,
+    )
+
+
+@app.patch("/tasks/{task_id}/subtasks/{subtask_id}", response_model=SubtaskResponse)
+def update_subtask(
+    task_id: int,
+    subtask_id: int,
+    payload: SubtaskUpdate,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Judul subtask tidak boleh kosong.")
+    repository = SubtaskRepository(service.repository.db_path)
+    if not repository.update_for_user(subtask_id, task_id, user.id, title=title):
+        raise HTTPException(status_code=404, detail="Subtask not found")
+    subtasks = repository.list_for_task(task_id, user.id)
+    subtask = next(item for item in subtasks if item.id == subtask_id)
+    return SubtaskResponse(
+        id=subtask.id,
+        task_id=subtask.task_id,
+        title=subtask.title,
+        completed=subtask.completed,
+    )
+
+
+@app.patch(
+    "/tasks/{task_id}/subtasks/{subtask_id}/complete",
+    response_model=SubtaskResponse,
+)
+def complete_subtask(
+    task_id: int,
+    subtask_id: int,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    repository = SubtaskRepository(service.repository.db_path)
+    if not repository.complete_for_user(subtask_id, task_id, user.id):
+        raise HTTPException(status_code=404, detail="Subtask not found")
+    subtasks = repository.list_for_task(task_id, user.id)
+    subtask = next(item for item in subtasks if item.id == subtask_id)
+    return SubtaskResponse(
+        id=subtask.id,
+        task_id=subtask.task_id,
+        title=subtask.title,
+        completed=subtask.completed,
+    )
+
+
+@app.delete(
+    "/tasks/{task_id}/subtasks/{subtask_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_subtask(
+    task_id: int,
+    subtask_id: int,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    if not SubtaskRepository(service.repository.db_path).delete_for_user(
+        subtask_id, task_id, user.id
+    ):
+        raise HTTPException(status_code=404, detail="Subtask not found")
 
 
 @app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
