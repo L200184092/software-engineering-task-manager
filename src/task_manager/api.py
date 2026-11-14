@@ -23,6 +23,7 @@ from .models import Task, User
 from .repository import TaskRepository
 from .services import TaskService
 from .subtask_repository import SubtaskRepository
+from .tag_repository import TagRepository
 from .user_repository import UserRepository
 
 app = FastAPI(
@@ -158,6 +159,19 @@ class CategoryUpdate(BaseModel):
 class CategoryResponse(BaseModel):
     id: int
     name: str
+
+
+class TagCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+
+
+class TagResponse(BaseModel):
+    id: int
+    name: str
+
+
+class TaskTagsUpdate(BaseModel):
+    tag_ids: list[int] = Field(default_factory=list, max_length=50)
 
 
 class TaskResponse(BaseModel):
@@ -349,6 +363,98 @@ def delete_category(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@app.get("/tags", response_model=list[TagResponse])
+def list_tags(
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    return [
+        TagResponse(id=tag.id, name=tag.name)
+        for tag in TagRepository(service.repository.db_path).list_for_user(user.id)
+    ]
+
+
+@app.post("/tags", response_model=TagResponse, status_code=status.HTTP_201_CREATED)
+def create_tag(
+    payload: TagCreate,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Nama tag tidak boleh kosong.")
+    try:
+        tag = TagRepository(service.repository.db_path).create_for_user(name, user.id)
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(
+            status_code=409, detail="Tag dengan nama tersebut sudah ada."
+        ) from exc
+    return TagResponse(id=tag.id, name=tag.name)
+
+
+@app.patch("/tags/{tag_id}", response_model=TagResponse)
+def update_tag(
+    tag_id: int,
+    payload: TagCreate,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Nama tag tidak boleh kosong.")
+    repo = TagRepository(service.repository.db_path)
+    try:
+        if not repo.update_for_user(tag_id, user.id, name):
+            raise HTTPException(status_code=404, detail="Tag not found")
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(
+            status_code=409, detail="Tag dengan nama tersebut sudah ada."
+        ) from exc
+    return TagResponse(id=tag_id, name=name)
+
+
+@app.delete("/tags/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_tag(
+    tag_id: int,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    if not TagRepository(service.repository.db_path).delete_for_user(tag_id, user.id):
+        raise HTTPException(status_code=404, detail="Tag not found")
+
+
+@app.get("/tasks/{task_id}/tags", response_model=list[TagResponse])
+def list_task_tags(
+    task_id: int,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    tags = TagRepository(service.repository.db_path).list_for_task(task_id, user.id)
+    if tags is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return [TagResponse(id=tag.id, name=tag.name) for tag in tags]
+
+
+@app.put("/tasks/{task_id}/tags", response_model=list[TagResponse])
+def set_task_tags(
+    task_id: int,
+    payload: TaskTagsUpdate,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    repo = TagRepository(service.repository.db_path)
+    try:
+        if not repo.set_for_task(task_id, user.id, payload.tag_ids):
+            raise HTTPException(status_code=404, detail="Task not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    tags = repo.list_for_task(task_id, user.id)
+    ActivityRepository(service.repository.db_path).record(
+        task_id, user.id, "tags_updated", ", ".join(tag.name for tag in tags)
+    )
+    return [TagResponse(id=tag.id, name=tag.name) for tag in tags]
+
+
 @app.get("/tasks", response_model=list[TaskResponse])
 def list_tasks(
     limit: int = Query(default=10, ge=1, le=100),
@@ -361,6 +467,7 @@ def list_tasks(
     due_from: str | None = Query(default=None),
     due_to: str | None = Query(default=None),
     category_id: str | None = Query(default=None),
+    tag_id: int | None = Query(default=None, ge=1),
     user: User = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
 ):
@@ -440,6 +547,7 @@ def list_tasks(
         due_from=due_from,
         due_to=due_to,
         category_id=category_filter,
+        tag_id=tag_id,
     )
 
     return [to_task_response(task, service, user.id) for task in tasks]

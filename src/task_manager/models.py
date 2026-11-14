@@ -68,3 +68,10 @@ class TaskActivity:
     details: str = ""
     id: int | None = None
     created_at: str | None = None
+
+
+@dataclass
+class Tag:
+    name: str
+    user_id: int
+    id: int | None = None

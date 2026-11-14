@@ -128,6 +128,7 @@ class TaskRepository:
         due_from: str | None = None,
         due_to: str | None = None,
         category_id: int | str | None = None,
+        tag_id: int | None = None,
     ) -> list[Task]:
         """Mengambil tugas milik pengguna dengan pencarian, filter,
         pagination, dan sorting.
@@ -178,6 +179,17 @@ class TaskRepository:
         elif category_id is not None:
             query += " AND category_id = ?"
             params.append(category_id)
+
+        if tag_id is not None:
+            query += """ AND EXISTS (
+                SELECT 1 FROM task_tags tt
+                JOIN tags tg ON tg.id = tt.tag_id
+                WHERE tt.task_id = tasks.id
+                  AND tt.user_id = ?
+                  AND tt.tag_id = ?
+                  AND tg.user_id = ?
+            )"""
+            params.extend([user_id, tag_id, user_id])
 
         if sort_by == "priority":
             query += """
