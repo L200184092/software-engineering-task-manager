@@ -44,3 +44,27 @@ class Subtask:
     title: str
     id: int | None = None
     completed: bool = False
+
+
+@dataclass
+class TaskComment:
+    """Komentar milik pengguna pada sebuah task."""
+
+    task_id: int
+    user_id: int
+    content: str
+    id: int | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class TaskActivity:
+    """Catatan aktivitas pada sebuah task."""
+
+    task_id: int
+    user_id: int
+    action: str
+    details: str = ""
+    id: int | None = None
+    created_at: str | None = None

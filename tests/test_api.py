@@ -2000,3 +2000,62 @@ def test_subtask_rejects_blank_title(client):
         f"/tasks/{task['id']}/subtasks", json={"title": "   "}, headers=headers
     )
     assert response.status_code == 422
+
+
+def test_task_comments_and_activity_endpoints(client):
+    headers = register_and_login(client, "commentuser", "commentuser@example.com")
+    created = client.post("/tasks", json={"title": "Commentable"}, headers=headers)
+    assert created.status_code == 201
+    task_id = created.json()["id"]
+
+    comment = client.post(
+        f"/tasks/{task_id}/comments", json={"content": "First note"}, headers=headers
+    )
+    assert comment.status_code == 201, comment.text
+    comment_id = comment.json()["id"]
+    assert comment.json()["content"] == "First note"
+
+    listed = client.get(f"/tasks/{task_id}/comments", headers=headers)
+    assert listed.status_code == 200
+    assert len(listed.json()) == 1
+
+    updated = client.patch(
+        f"/tasks/{task_id}/comments/{comment_id}",
+        json={"content": "Updated note"},
+        headers=headers,
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["content"] == "Updated note"
+
+    activity = client.get(f"/tasks/{task_id}/activity", headers=headers)
+    assert activity.status_code == 200
+    actions = [item["action"] for item in activity.json()]
+    assert "task_created" in actions
+    assert "comment_added" in actions
+    assert "comment_updated" in actions
+
+    deleted = client.delete(f"/tasks/{task_id}/comments/{comment_id}", headers=headers)
+    assert deleted.status_code == 204
+    assert client.get(f"/tasks/{task_id}/comments", headers=headers).json() == []
+
+
+def test_comments_and_activity_preserve_user_isolation(client):
+    first = register_and_login(client, "commentfirst", "commentfirst@example.com")
+    second = register_and_login(client, "commentsecond", "commentsecond@example.com")
+    task = client.post("/tasks", json={"title": "Private task"}, headers=first)
+    task_id = task.json()["id"]
+    comment = client.post(
+        f"/tasks/{task_id}/comments", json={"content": "Private"}, headers=first
+    )
+    comment_id = comment.json()["id"]
+
+    assert client.get(f"/tasks/{task_id}/comments", headers=second).status_code == 404
+    assert client.get(f"/tasks/{task_id}/activity", headers=second).status_code == 404
+    assert (
+        client.patch(
+            f"/tasks/{task_id}/comments/{comment_id}",
+            json={"content": "Not allowed"},
+            headers=second,
+        ).status_code
+        == 404
+    )

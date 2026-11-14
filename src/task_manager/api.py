@@ -8,6 +8,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from .activity_repository import ActivityRepository
 from .auth import (
     create_access_token,
     decode_access_token,
@@ -16,6 +17,7 @@ from .auth import (
 )
 from .category_repository import CategoryRepository
 from .category_services import CategoryService
+from .comment_repository import CommentRepository
 from .database import get_connection
 from .models import Task, User
 from .repository import TaskRepository
@@ -108,6 +110,26 @@ class TaskPatch(BaseModel):
     due_date: str | None = None
     category_id: int | None = Field(default=None, ge=1)
     recurrence: str | None = None
+
+
+class CommentCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=5000)
+
+
+class CommentResponse(BaseModel):
+    id: int
+    task_id: int
+    content: str
+    created_at: str
+    updated_at: str
+
+
+class ActivityResponse(BaseModel):
+    id: int
+    task_id: int
+    action: str
+    details: str
+    created_at: str
 
 
 class SubtaskCreate(BaseModel):
@@ -472,6 +494,9 @@ def create_task(
             user.id,
         )
 
+        ActivityRepository(service.repository.db_path).record(
+            task.id, user.id, "task_created", task.title
+        )
         return to_task_response(task, service, user.id)
 
     except ValueError as exc:
@@ -527,6 +552,9 @@ def update_task(
     if not updated:
         raise HTTPException(status_code=404, detail="Task not found")
     task = service.repository.get_for_user(task_id, user.id)
+    ActivityRepository(service.repository.db_path).record(
+        task_id, user.id, "task_updated", task.title
+    )
     return to_task_response(task, service, user.id)
 
 
@@ -606,6 +634,9 @@ def patch_task(
         )
 
     task = service.repository.get_for_user(task_id, user.id)
+    ActivityRepository(service.repository.db_path).record(
+        task_id, user.id, "task_updated", ", ".join(fields)
+    )
     return to_task_response(task, service, user.id)
 
 
@@ -618,6 +649,9 @@ def complete_task(
     if not service.repository.complete_for_user(task_id, user.id):
         raise HTTPException(status_code=404, detail="Task not found")
     task = service.repository.get_for_user(task_id, user.id)
+    ActivityRepository(service.repository.db_path).record(
+        task_id, user.id, "task_completed", task.title
+    )
     return to_task_response(task, service, user.id)
 
 
@@ -679,6 +713,9 @@ def create_subtask(
     )
     if subtask is None:
         raise HTTPException(status_code=404, detail="Task not found")
+    ActivityRepository(service.repository.db_path).record(
+        task_id, user.id, "subtask_created", title
+    )
     return SubtaskResponse(
         id=subtask.id,
         task_id=subtask.task_id,
@@ -726,6 +763,9 @@ def complete_subtask(
         raise HTTPException(status_code=404, detail="Subtask not found")
     subtasks = repository.list_for_task(task_id, user.id)
     subtask = next(item for item in subtasks if item.id == subtask_id)
+    ActivityRepository(service.repository.db_path).record(
+        task_id, user.id, "subtask_completed", subtask.title
+    )
     return SubtaskResponse(
         id=subtask.id,
         task_id=subtask.task_id,
@@ -748,6 +788,128 @@ def delete_subtask(
         subtask_id, task_id, user.id
     ):
         raise HTTPException(status_code=404, detail="Subtask not found")
+
+
+@app.get("/tasks/{task_id}/comments", response_model=list[CommentResponse])
+def list_task_comments(
+    task_id: int,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    items = CommentRepository(service.repository.db_path).list_for_task(
+        task_id, user.id
+    )
+    if items is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return [
+        CommentResponse(
+            id=x.id,
+            task_id=x.task_id,
+            content=x.content,
+            created_at=x.created_at,
+            updated_at=x.updated_at,
+        )
+        for x in items
+    ]
+
+
+@app.post(
+    "/tasks/{task_id}/comments",
+    response_model=CommentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_task_comment(
+    task_id: int,
+    payload: CommentCreate,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="Komentar tidak boleh kosong.")
+    repo = CommentRepository(service.repository.db_path)
+    item = repo.create(task_id, user.id, content)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    ActivityRepository(service.repository.db_path).record(
+        task_id, user.id, "comment_added", content[:200]
+    )
+    return CommentResponse(
+        id=item.id,
+        task_id=item.task_id,
+        content=item.content,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
+
+
+@app.patch("/tasks/{task_id}/comments/{comment_id}", response_model=CommentResponse)
+def update_task_comment(
+    task_id: int,
+    comment_id: int,
+    payload: CommentCreate,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="Komentar tidak boleh kosong.")
+    repo = CommentRepository(service.repository.db_path)
+    if not repo.update(comment_id, task_id, user.id, content):
+        raise HTTPException(status_code=404, detail="Comment not found")
+    item = next(x for x in repo.list_for_task(task_id, user.id) if x.id == comment_id)
+    ActivityRepository(service.repository.db_path).record(
+        task_id, user.id, "comment_updated", content[:200]
+    )
+    return CommentResponse(
+        id=item.id,
+        task_id=item.task_id,
+        content=item.content,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
+
+
+@app.delete(
+    "/tasks/{task_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+def delete_task_comment(
+    task_id: int,
+    comment_id: int,
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    if not CommentRepository(service.repository.db_path).delete(
+        comment_id, task_id, user.id
+    ):
+        raise HTTPException(status_code=404, detail="Comment not found")
+    ActivityRepository(service.repository.db_path).record(
+        task_id, user.id, "comment_deleted", f"Comment {comment_id}"
+    )
+
+
+@app.get("/tasks/{task_id}/activity", response_model=list[ActivityResponse])
+def list_task_activity(
+    task_id: int,
+    limit: int = Query(default=100, ge=1, le=500),
+    user: User = Depends(get_current_user),
+    service: TaskService = Depends(get_task_service),
+):
+    items = ActivityRepository(service.repository.db_path).list_for_task(
+        task_id, user.id, limit
+    )
+    if items is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return [
+        ActivityResponse(
+            id=x.id,
+            task_id=x.task_id,
+            action=x.action,
+            details=x.details,
+            created_at=x.created_at,
+        )
+        for x in items
+    ]
 
 
 @app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
